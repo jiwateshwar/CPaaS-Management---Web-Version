@@ -1,6 +1,7 @@
 import React from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Toaster } from './components/ui/toaster';
 import { DashboardPage } from './pages/DashboardPage';
 import { VendorListPage } from './pages/VendorListPage';
@@ -15,6 +16,7 @@ import { SettingsPage } from './pages/SettingsPage';
 
 export function App() {
   return (
+    <ErrorBoundary>
     <HashRouter>
       <Routes>
         <Route element={<AppShell />}>
@@ -32,5 +34,6 @@ export function App() {
       </Routes>
       <Toaster />
     </HashRouter>
+    </ErrorBoundary>
   );
 }
