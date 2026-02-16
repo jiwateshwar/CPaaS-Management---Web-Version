@@ -49,7 +49,7 @@ export function ClientListPage() {
     [page, search],
   );
 
-  const { mutate: createClient } = useIpcMutation('client:create');
+  const { mutate: createClient } = useIpcMutation('client:create', { successMessage: 'Client created successfully' });
 
   const handleCreate = async () => {
     if (!formData.name || !formData.code) return;

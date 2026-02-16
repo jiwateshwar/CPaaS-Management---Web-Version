@@ -121,6 +121,7 @@ export function registerIpcHandlers(db: Database.Database): void {
 
   // === FX Rates ===
   ipcMain.handle('fx:list', (_, params) => fxRateRepo.list(params));
+  ipcMain.handle('fx:create', (_, params) => fxRateRepo.create(params));
   ipcMain.handle('fx:getEffective', (_, params) =>
     fxRateRepo.getEffective(params.from, params.to, params.date),
   );

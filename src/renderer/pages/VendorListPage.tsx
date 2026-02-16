@@ -48,7 +48,7 @@ export function VendorListPage() {
     [page, search],
   );
 
-  const { mutate: createVendor } = useIpcMutation('vendor:create');
+  const { mutate: createVendor } = useIpcMutation('vendor:create', { successMessage: 'Vendor created successfully' });
 
   const handleCreate = async () => {
     if (!formData.name || !formData.code) return;

@@ -26,6 +26,7 @@ import type {
   CountryMatchResult,
   PendingCountryResolution,
   FxRate,
+  CreateFxRateDto,
   FxRateListParams,
   UploadBatch,
   BatchError,
@@ -92,6 +93,7 @@ export interface IpcChannelMap {
 
   // FX Rates
   'fx:list': { params: FxRateListParams; result: PaginatedResult<FxRate> };
+  'fx:create': { params: CreateFxRateDto; result: FxRate };
   'fx:getEffective': { params: { from: string; to: string; date: string }; result: FxRate | null };
 
   // Upload / CSV

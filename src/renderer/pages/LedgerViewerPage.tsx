@@ -70,8 +70,8 @@ export function LedgerViewerPage() {
     [page, dateFrom, dateTo, includeReversals],
   );
 
-  const { mutate: exportLedger } = useIpcMutation('ledger:export');
-  const { mutate: reverseEntry, loading: reversing } = useIpcMutation('ledger:reverseEntry');
+  const { mutate: exportLedger } = useIpcMutation('ledger:export', { successMessage: 'Ledger exported successfully' });
+  const { mutate: reverseEntry, loading: reversing } = useIpcMutation('ledger:reverseEntry', { successMessage: 'Reversal entry created' });
 
   const handleReverse = async () => {
     if (!reversalTarget || !reversalReason.trim()) return;

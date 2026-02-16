@@ -1,6 +1,7 @@
 import React from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
+import { Toaster } from './components/ui/toaster';
 import { DashboardPage } from './pages/DashboardPage';
 import { VendorListPage } from './pages/VendorListPage';
 import { ClientListPage } from './pages/ClientListPage';
@@ -29,6 +30,7 @@ export function App() {
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
       </Routes>
+      <Toaster />
     </HashRouter>
   );
 }

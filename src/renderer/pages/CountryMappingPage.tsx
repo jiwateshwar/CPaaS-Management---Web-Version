@@ -19,7 +19,7 @@ export function CountryMappingPage() {
     [],
   );
 
-  const { mutate: resolveMapping } = useIpcMutation('country:resolveMapping');
+  const { mutate: resolveMapping } = useIpcMutation('country:resolveMapping', { successMessage: 'Country mapping saved' });
 
   const handleResolve = async (resolutionId: number, countryCode: string) => {
     await resolveMapping({ resolutionId, countryCode });
