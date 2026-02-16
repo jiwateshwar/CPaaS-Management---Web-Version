@@ -1,0 +1,17 @@
+export const COMMON_CURRENCIES = [
+  { code: 'USD', name: 'US Dollar' },
+  { code: 'EUR', name: 'Euro' },
+  { code: 'GBP', name: 'British Pound' },
+  { code: 'INR', name: 'Indian Rupee' },
+  { code: 'AED', name: 'UAE Dirham' },
+  { code: 'SGD', name: 'Singapore Dollar' },
+  { code: 'AUD', name: 'Australian Dollar' },
+  { code: 'CAD', name: 'Canadian Dollar' },
+  { code: 'CHF', name: 'Swiss Franc' },
+  { code: 'JPY', name: 'Japanese Yen' },
+  { code: 'CNY', name: 'Chinese Yuan' },
+  { code: 'BRL', name: 'Brazilian Real' },
+  { code: 'ZAR', name: 'South African Rand' },
+  { code: 'MXN', name: 'Mexican Peso' },
+  { code: 'SAR', name: 'Saudi Riyal' },
+];

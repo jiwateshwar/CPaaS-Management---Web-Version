@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx create-electron-app@latest . --template=vite-typescript)"
+    ]
+  }
+}
