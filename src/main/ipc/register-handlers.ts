@@ -15,6 +15,7 @@ import { CountryNormalizer } from '../services/country-normalizer';
 import { MarginEngine } from '../services/margin-engine';
 import * as Papa from 'papaparse';
 import * as fs from 'node:fs';
+import type { ColumnMapping, UploadType } from '../../shared/types';
 
 export function registerIpcHandlers(db: Database.Database): void {
   const vendorRepo = new VendorRepository(db);
@@ -140,7 +141,7 @@ export function registerIpcHandlers(db: Database.Database): void {
     };
   });
 
-  ipcMain.handle('upload:start', async (event, params) => {
+  ipcMain.handle('upload:start', async (event, params: { type: UploadType; filePath: string; entityId?: number; columnMapping: ColumnMapping[] }) => {
     const batch = batchRepo.create(
       params.type,
       params.filePath.split(/[\\/]/).pop() || 'unknown',

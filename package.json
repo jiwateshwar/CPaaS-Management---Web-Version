@@ -12,7 +12,12 @@
     "publish": "electron-forge publish",
     "lint": "eslint --ext .ts,.tsx src/"
   },
-  "keywords": ["cpaas", "finance", "ledger", "electron"],
+  "keywords": [
+    "cpaas",
+    "finance",
+    "ledger",
+    "electron"
+  ],
   "author": {
     "name": "Jiwateshwar Singh",
     "email": "jiwateshwar@gmail.com"
@@ -53,7 +58,7 @@
     "@radix-ui/react-tooltip": "^1.1.8",
     "@tanstack/react-table": "^8.21.0",
     "@tanstack/react-virtual": "^3.11.2",
-    "better-sqlite3": "^11.7.0",
+    "better-sqlite3": "^12.6.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",

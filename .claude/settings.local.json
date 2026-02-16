@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(npx create-electron-app@latest . --template=vite-typescript)",
-      "Bash(npx electron-forge:*)"
+      "Bash(npx electron-forge:*)",
+      "Bash(node -e:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }
