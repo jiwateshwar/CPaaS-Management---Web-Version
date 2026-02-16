@@ -5,9 +5,11 @@ import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import { DataTable } from '../components/data-table/DataTable';
 import { PageHeader } from '../components/layout/PageHeader';
+import { CsvUploadWizard } from '../components/csv-upload/CsvUploadWizard';
 import { useIpcQuery, useIpcMutation } from '../hooks/useIpc';
 import type { Client } from '../../shared/types';
-import { Plus, Search } from 'lucide-react';
+import { CLIENT_RATE_FIELDS } from '../../shared/constants/upload-types';
+import { Plus, Search, Upload } from 'lucide-react';
 
 const columns: ColumnDef<Client, unknown>[] = [
   { accessorKey: 'code', header: 'Code' },
@@ -30,6 +32,8 @@ export function ClientListPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadClient, setUploadClient] = useState<Client | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     code: '',
@@ -61,6 +65,29 @@ export function ClientListPage() {
     });
     refetch();
   };
+
+  const handleUploadRates = (client: Client) => {
+    setUploadClient(client);
+    setUploadOpen(true);
+  };
+
+  const actionColumns: ColumnDef<Client, unknown>[] = [
+    ...columns,
+    {
+      id: 'actions',
+      header: 'Actions',
+      cell: ({ row }) => (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => handleUploadRates(row.original)}
+        >
+          <Upload className="h-3 w-3 mr-1" />
+          Upload Rates
+        </Button>
+      ),
+    },
+  ];
 
   return (
     <div>
@@ -148,7 +175,7 @@ export function ClientListPage() {
       </div>
 
       <DataTable
-        columns={columns}
+        columns={actionColumns}
         data={data?.data ?? []}
         totalCount={data?.total ?? 0}
         page={data?.page ?? 1}
@@ -157,6 +184,16 @@ export function ClientListPage() {
         onPageChange={setPage}
         isLoading={loading}
         emptyMessage="No clients yet. Add your first client above."
+      />
+
+      <CsvUploadWizard
+        open={uploadOpen}
+        onOpenChange={setUploadOpen}
+        uploadType="client_rate"
+        entityId={uploadClient?.id}
+        entityName={uploadClient?.name}
+        fieldDefs={CLIENT_RATE_FIELDS}
+        onComplete={() => refetch()}
       />
     </div>
   );

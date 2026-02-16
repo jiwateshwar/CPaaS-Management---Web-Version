@@ -3,12 +3,21 @@ import { type ColumnDef } from '@tanstack/react-table';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
+import { Card, CardContent } from '../components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '../components/ui/dialog';
 import { DataTable } from '../components/data-table/DataTable';
 import { PageHeader } from '../components/layout/PageHeader';
 import { useIpcQuery, useIpcMutation } from '../hooks/useIpc';
 import type { MarginLedgerEntry } from '../../shared/types';
 import { formatCurrency, formatRate, formatDate, formatNumber } from '../lib/utils';
-import { Download, RotateCcw } from 'lucide-react';
+import { Download, RotateCcw, DollarSign, TrendingUp, TrendingDown, Hash } from 'lucide-react';
 
 const columns: ColumnDef<MarginLedgerEntry, unknown>[] = [
   { accessorKey: 'id', header: 'ID', size: 60 },
@@ -16,12 +25,9 @@ const columns: ColumnDef<MarginLedgerEntry, unknown>[] = [
   { accessorKey: 'client_name', header: 'Client' },
   { accessorKey: 'vendor_name', header: 'Vendor' },
   { accessorKey: 'country_name', header: 'Country' },
-  { accessorKey: 'channel', header: 'Channel' },
-  { accessorKey: 'use_case', header: 'Use Case' },
-  { accessorKey: 'message_count', header: 'Messages', cell: ({ getValue }) => formatNumber(getValue() as number) },
-  { accessorKey: 'vendor_rate', header: 'V.Rate', cell: ({ getValue }) => formatRate(getValue() as number) },
+  { accessorKey: 'channel', header: 'Ch.' },
+  { accessorKey: 'message_count', header: 'Msgs', cell: ({ getValue }) => formatNumber(getValue() as number) },
   { accessorKey: 'vendor_cost', header: 'V.Cost', cell: ({ getValue }) => formatCurrency(getValue() as number) },
-  { accessorKey: 'client_rate', header: 'C.Rate', cell: ({ getValue }) => formatRate(getValue() as number) },
   { accessorKey: 'client_revenue', header: 'Revenue', cell: ({ getValue }) => formatCurrency(getValue() as number) },
   {
     accessorKey: 'margin',
@@ -39,7 +45,7 @@ const columns: ColumnDef<MarginLedgerEntry, unknown>[] = [
     accessorKey: 'is_reversal',
     header: 'Type',
     cell: ({ getValue }) =>
-      getValue() ? <Badge variant="destructive">Reversal</Badge> : <Badge variant="success">Normal</Badge>,
+      getValue() ? <Badge variant="destructive">Reversal</Badge> : null,
   },
 ];
 
@@ -48,6 +54,8 @@ export function LedgerViewerPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [includeReversals, setIncludeReversals] = useState(true);
+  const [reversalTarget, setReversalTarget] = useState<MarginLedgerEntry | null>(null);
+  const [reversalReason, setReversalReason] = useState('');
 
   const { data, loading, refetch } = useIpcQuery(
     'ledger:list',
@@ -63,6 +71,50 @@ export function LedgerViewerPage() {
   );
 
   const { mutate: exportLedger } = useIpcMutation('ledger:export');
+  const { mutate: reverseEntry, loading: reversing } = useIpcMutation('ledger:reverseEntry');
+
+  const handleReverse = async () => {
+    if (!reversalTarget || !reversalReason.trim()) return;
+    await reverseEntry({ entryId: reversalTarget.id, reason: reversalReason });
+    setReversalTarget(null);
+    setReversalReason('');
+    refetch();
+  };
+
+  // Column totals from current page data
+  const pageData = data?.data ?? [];
+  const totals = pageData.reduce(
+    (acc, row) => ({
+      messages: acc.messages + (row.message_count ?? 0),
+      cost: acc.cost + (row.vendor_cost ?? 0),
+      revenue: acc.revenue + (row.client_revenue ?? 0),
+      margin: acc.margin + (row.margin ?? 0),
+    }),
+    { messages: 0, cost: 0, revenue: 0, margin: 0 },
+  );
+
+  const actionColumns: ColumnDef<MarginLedgerEntry, unknown>[] = [
+    ...columns,
+    {
+      id: 'actions',
+      header: '',
+      cell: ({ row }) => {
+        const entry = row.original;
+        if (entry.is_reversal) return null;
+        return (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-destructive hover:text-destructive"
+            onClick={() => setReversalTarget(entry)}
+          >
+            <RotateCcw className="h-3 w-3 mr-1" />
+            Reverse
+          </Button>
+        );
+      },
+    },
+  ];
 
   return (
     <div>
@@ -77,6 +129,7 @@ export function LedgerViewerPage() {
         }
       />
 
+      {/* Filters */}
       <div className="flex items-center gap-3 mb-4">
         <Input
           type="date"
@@ -100,11 +153,48 @@ export function LedgerViewerPage() {
           />
           Show reversals
         </label>
+        {(dateFrom || dateTo) && (
+          <Button variant="ghost" size="sm" onClick={() => { setDateFrom(''); setDateTo(''); setPage(1); }}>
+            Clear filters
+          </Button>
+        )}
       </div>
 
+      {/* Page totals */}
+      {pageData.length > 0 && (
+        <div className="grid grid-cols-4 gap-3 mb-4">
+          <Card className="p-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+              <Hash className="h-3 w-3" /> Messages (page)
+            </div>
+            <p className="text-lg font-semibold">{formatNumber(totals.messages)}</p>
+          </Card>
+          <Card className="p-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+              <TrendingDown className="h-3 w-3" /> Cost (page)
+            </div>
+            <p className="text-lg font-semibold">{formatCurrency(totals.cost)}</p>
+          </Card>
+          <Card className="p-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+              <TrendingUp className="h-3 w-3" /> Revenue (page)
+            </div>
+            <p className="text-lg font-semibold">{formatCurrency(totals.revenue)}</p>
+          </Card>
+          <Card className="p-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+              <DollarSign className="h-3 w-3" /> Margin (page)
+            </div>
+            <p className={`text-lg font-semibold ${totals.margin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {formatCurrency(totals.margin)}
+            </p>
+          </Card>
+        </div>
+      )}
+
       <DataTable
-        columns={columns}
-        data={data?.data ?? []}
+        columns={actionColumns}
+        data={pageData}
         totalCount={data?.total ?? 0}
         page={data?.page ?? 1}
         pageSize={data?.pageSize ?? 100}
@@ -113,6 +203,50 @@ export function LedgerViewerPage() {
         isLoading={loading}
         emptyMessage="No ledger entries. Upload traffic data and compute margins first."
       />
+
+      {/* Reversal Dialog */}
+      <Dialog open={!!reversalTarget} onOpenChange={(open) => !open && setReversalTarget(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reverse Ledger Entry</DialogTitle>
+            <DialogDescription>
+              This will create a new entry with negated amounts. The original entry remains unchanged.
+            </DialogDescription>
+          </DialogHeader>
+          {reversalTarget && (
+            <div className="space-y-3">
+              <div className="p-3 bg-muted rounded-lg text-sm space-y-1">
+                <p><strong>Entry #{reversalTarget.id}</strong></p>
+                <p>Client: {reversalTarget.client_name} | Vendor: {reversalTarget.vendor_name}</p>
+                <p>Country: {reversalTarget.country_name} | Date: {formatDate(reversalTarget.traffic_date)}</p>
+                <p>Margin: {formatCurrency(reversalTarget.margin)}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Reason for reversal *</label>
+                <Input
+                  className="mt-1"
+                  placeholder="e.g., Incorrect rate applied, duplicate traffic"
+                  value={reversalReason}
+                  onChange={(e) => setReversalReason(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReversalTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!reversalReason.trim() || reversing}
+              onClick={handleReverse}
+            >
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Create Reversal
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

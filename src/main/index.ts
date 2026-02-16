@@ -11,14 +11,19 @@ if (started) {
   app.quit();
 }
 
-// Initialize database
-const db = createConnection();
-const migrator = new Migrator(db);
-migrator.initialize();
-migrator.migrate(migrations);
+let db: ReturnType<typeof createConnection>;
 
-// Register IPC handlers
-registerIpcHandlers(db);
+try {
+  db = createConnection();
+  const migrator = new Migrator(db);
+  migrator.initialize();
+  migrator.migrate(migrations);
+  registerIpcHandlers(db);
+  console.log('[main] Database initialized and IPC handlers registered');
+} catch (err) {
+  console.error('[main] Failed to initialize database:', err);
+  app.quit();
+}
 
 const createWindow = () => {
   const mainWindow = new BrowserWindow({
@@ -42,15 +47,18 @@ const createWindow = () => {
     );
   }
 
-  if (process.env.NODE_ENV === 'development') {
-    mainWindow.webContents.openDevTools();
-  }
+  mainWindow.webContents.openDevTools();
+
+  mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    const levelMap = ['LOG', 'WARN', 'ERROR'];
+    console.log(`[renderer:${levelMap[level] || level}] ${message} (${sourceId}:${line})`);
+  });
 };
 
 app.on('ready', createWindow);
 
 app.on('window-all-closed', () => {
-  db.close();
+  if (db) db.close();
   app.quit();
 });
 

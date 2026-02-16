@@ -4,7 +4,12 @@
       "Bash(npx create-electron-app@latest . --template=vite-typescript)",
       "Bash(npx electron-forge:*)",
       "Bash(node -e:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npx vite build:*)",
+      "Bash(taskkill:*)",
+      "Bash(netstat:*)",
+      "Bash(tasklist:*)",
+      "Bash(wmic process where ProcessId=44364 get CommandLine:*)"
     ]
   }
 }

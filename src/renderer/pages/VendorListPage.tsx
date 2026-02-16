@@ -5,9 +5,11 @@ import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import { DataTable } from '../components/data-table/DataTable';
 import { PageHeader } from '../components/layout/PageHeader';
+import { CsvUploadWizard } from '../components/csv-upload/CsvUploadWizard';
 import { useIpcQuery, useIpcMutation } from '../hooks/useIpc';
 import type { Vendor } from '../../shared/types';
-import { Plus, Search } from 'lucide-react';
+import { VENDOR_RATE_FIELDS } from '../../shared/constants/upload-types';
+import { Plus, Search, Upload } from 'lucide-react';
 
 const columns: ColumnDef<Vendor, unknown>[] = [
   { accessorKey: 'code', header: 'Code' },
@@ -30,6 +32,8 @@ export function VendorListPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadVendor, setUploadVendor] = useState<Vendor | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     code: '',
@@ -53,6 +57,29 @@ export function VendorListPage() {
     setFormData({ name: '', code: '', contact_name: '', contact_email: '', currency: 'USD' });
     refetch();
   };
+
+  const handleUploadRates = (vendor: Vendor) => {
+    setUploadVendor(vendor);
+    setUploadOpen(true);
+  };
+
+  const actionColumns: ColumnDef<Vendor, unknown>[] = [
+    ...columns,
+    {
+      id: 'actions',
+      header: 'Actions',
+      cell: ({ row }) => (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => handleUploadRates(row.original)}
+        >
+          <Upload className="h-3 w-3 mr-1" />
+          Upload Rates
+        </Button>
+      ),
+    },
+  ];
 
   return (
     <div>
@@ -128,7 +155,7 @@ export function VendorListPage() {
       </div>
 
       <DataTable
-        columns={columns}
+        columns={actionColumns}
         data={data?.data ?? []}
         totalCount={data?.total ?? 0}
         page={data?.page ?? 1}
@@ -137,6 +164,16 @@ export function VendorListPage() {
         onPageChange={setPage}
         isLoading={loading}
         emptyMessage="No vendors yet. Add your first vendor above."
+      />
+
+      <CsvUploadWizard
+        open={uploadOpen}
+        onOpenChange={setUploadOpen}
+        uploadType="vendor_rate"
+        entityId={uploadVendor?.id}
+        entityName={uploadVendor?.name}
+        fieldDefs={VENDOR_RATE_FIELDS}
+        onComplete={() => refetch()}
       />
     </div>
   );
