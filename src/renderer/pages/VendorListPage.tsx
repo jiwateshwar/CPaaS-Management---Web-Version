@@ -3,6 +3,13 @@ import { type ColumnDef } from '@tanstack/react-table';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select';
 import { DataTable } from '../components/data-table/DataTable';
 import { PageHeader } from '../components/layout/PageHeader';
 import { CsvUploadWizard } from '../components/csv-upload/CsvUploadWizard';
@@ -63,6 +70,11 @@ export function VendorListPage() {
     setUploadOpen(true);
   };
 
+  const handleHeaderUpload = () => {
+    setUploadVendor(null);
+    setUploadOpen(true);
+  };
+
   const actionColumns: ColumnDef<Vendor, unknown>[] = [
     ...columns,
     {
@@ -87,10 +99,16 @@ export function VendorListPage() {
         title="Vendors"
         description="Manage upstream connectivity providers"
         actions={
-          <Button onClick={() => setShowForm(!showForm)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Vendor
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleHeaderUpload}>
+              <Upload className="h-4 w-4 mr-2" />
+              Upload Rates
+            </Button>
+            <Button onClick={() => setShowForm(!showForm)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Vendor
+            </Button>
+          </div>
         }
       />
 
@@ -166,9 +184,51 @@ export function VendorListPage() {
         emptyMessage="No vendors yet. Add your first vendor above."
       />
 
+      {/* Vendor selector when opening upload from header */}
+      {uploadOpen && !uploadVendor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-card border rounded-lg p-6 w-96 shadow-lg">
+            <h3 className="font-semibold text-lg mb-2">Select Vendor</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Choose which vendor these rates belong to
+            </p>
+            <Select
+              onValueChange={(val) => {
+                const vendor = data?.data.find((v) => v.id === Number(val));
+                if (vendor) setUploadVendor(vendor);
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a vendor..." />
+              </SelectTrigger>
+              <SelectContent>
+                {(data?.data ?? []).map((v) => (
+                  <SelectItem key={v.id} value={String(v.id)}>
+                    {v.name} ({v.code})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {(!data?.data || data.data.length === 0) && (
+              <p className="text-sm text-destructive mt-2">
+                No vendors found. Create a vendor first.
+              </p>
+            )}
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="outline" onClick={() => setUploadOpen(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <CsvUploadWizard
-        open={uploadOpen}
-        onOpenChange={setUploadOpen}
+        open={uploadOpen && !!uploadVendor}
+        onOpenChange={(open) => {
+          setUploadOpen(open);
+          if (!open) setUploadVendor(null);
+        }}
         uploadType="vendor_rate"
         entityId={uploadVendor?.id}
         entityName={uploadVendor?.name}

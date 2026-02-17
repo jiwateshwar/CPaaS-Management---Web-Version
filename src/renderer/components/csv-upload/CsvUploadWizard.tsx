@@ -16,8 +16,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
-import { Upload, FileText, ArrowRight, ArrowLeft, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { Upload, FileText, ArrowRight, ArrowLeft, Check, AlertCircle, Loader2, Download } from 'lucide-react';
 import type { FieldDef, ColumnMapping, CsvPreview, UploadBatch, UploadType, ProgressData, BatchCompleteEvent } from '../../../shared/types';
+import { SAMPLE_CSV_DATA } from '../../../shared/constants/sample-csv';
 
 type WizardStep = 'select' | 'mapping' | 'processing' | 'complete';
 
@@ -79,6 +80,20 @@ export function CsvUploadWizard({
       cleanupComplete();
     };
   }, []);
+
+  const handleDownloadSample = () => {
+    const sample = SAMPLE_CSV_DATA[uploadType];
+    if (!sample) return;
+    const blob = new Blob([sample.content], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = sample.filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   const handleSelectFile = async () => {
     const path = await window.electronAPI.invoke('dialog:openFile', {
@@ -194,14 +209,20 @@ export function CsvUploadWizard({
           <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed rounded-lg">
             <Upload className="h-12 w-12 text-muted-foreground mb-4" />
             <p className="text-muted-foreground mb-4">Select a CSV file to upload</p>
-            <Button onClick={handleSelectFile} disabled={loading}>
-              {loading ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <FileText className="h-4 w-4 mr-2" />
-              )}
-              Choose File
-            </Button>
+            <div className="flex gap-3">
+              <Button onClick={handleSelectFile} disabled={loading}>
+                {loading ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <FileText className="h-4 w-4 mr-2" />
+                )}
+                Choose File
+              </Button>
+              <Button variant="outline" onClick={handleDownloadSample}>
+                <Download className="h-4 w-4 mr-2" />
+                Download Sample
+              </Button>
+            </div>
           </div>
         )}
 

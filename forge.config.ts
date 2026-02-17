@@ -8,7 +8,9 @@ import { FuseV1Options, FuseVersion } from '@electron/fuses';
 
 const config: ForgeConfig = {
   packagerConfig: {
-    asar: true,
+    asar: {
+      unpack: '**/{better-sqlite3,bindings,file-uri-to-path}/**/*',
+    },
     name: 'CPaaS Management',
     executableName: 'cpaas-management',
     appBundleId: 'com.cpaas.management',

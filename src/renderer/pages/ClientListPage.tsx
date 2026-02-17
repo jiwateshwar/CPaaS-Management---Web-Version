@@ -3,6 +3,13 @@ import { type ColumnDef } from '@tanstack/react-table';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select';
 import { DataTable } from '../components/data-table/DataTable';
 import { PageHeader } from '../components/layout/PageHeader';
 import { CsvUploadWizard } from '../components/csv-upload/CsvUploadWizard';
@@ -71,6 +78,11 @@ export function ClientListPage() {
     setUploadOpen(true);
   };
 
+  const handleHeaderUpload = () => {
+    setUploadClient(null);
+    setUploadOpen(true);
+  };
+
   const actionColumns: ColumnDef<Client, unknown>[] = [
     ...columns,
     {
@@ -95,10 +107,16 @@ export function ClientListPage() {
         title="Clients"
         description="Manage downstream enterprise clients"
         actions={
-          <Button onClick={() => setShowForm(!showForm)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Client
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleHeaderUpload}>
+              <Upload className="h-4 w-4 mr-2" />
+              Upload Rates
+            </Button>
+            <Button onClick={() => setShowForm(!showForm)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Client
+            </Button>
+          </div>
         }
       />
 
@@ -186,9 +204,51 @@ export function ClientListPage() {
         emptyMessage="No clients yet. Add your first client above."
       />
 
+      {/* Client selector when opening upload from header */}
+      {uploadOpen && !uploadClient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-card border rounded-lg p-6 w-96 shadow-lg">
+            <h3 className="font-semibold text-lg mb-2">Select Client</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Choose which client these rates belong to
+            </p>
+            <Select
+              onValueChange={(val) => {
+                const client = data?.data.find((c) => c.id === Number(val));
+                if (client) setUploadClient(client);
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a client..." />
+              </SelectTrigger>
+              <SelectContent>
+                {(data?.data ?? []).map((c) => (
+                  <SelectItem key={c.id} value={String(c.id)}>
+                    {c.name} ({c.code})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {(!data?.data || data.data.length === 0) && (
+              <p className="text-sm text-destructive mt-2">
+                No clients found. Create a client first.
+              </p>
+            )}
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="outline" onClick={() => setUploadOpen(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <CsvUploadWizard
-        open={uploadOpen}
-        onOpenChange={setUploadOpen}
+        open={uploadOpen && !!uploadClient}
+        onOpenChange={(open) => {
+          setUploadOpen(open);
+          if (!open) setUploadClient(null);
+        }}
         uploadType="client_rate"
         entityId={uploadClient?.id}
         entityName={uploadClient?.name}
