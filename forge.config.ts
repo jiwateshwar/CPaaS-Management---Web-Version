@@ -1,6 +1,7 @@
 import type { ForgeConfig } from '@electron-forge/shared-types';
 import { MakerSquirrel } from '@electron-forge/maker-squirrel';
 import { MakerZIP } from '@electron-forge/maker-zip';
+import { AutoUnpackNativesPlugin } from '@electron-forge/plugin-auto-unpack-natives';
 import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
@@ -9,15 +10,21 @@ const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
     name: 'CPaaS Management',
+    executableName: 'cpaas-management',
+    appBundleId: 'com.cpaas.management',
+    appVersion: '1.0.0',
   },
   rebuildConfig: {},
   makers: [
     new MakerSquirrel({
       name: 'cpaas-management',
+      setupExe: 'CPaaS-Management-Setup.exe',
+      description: 'Financial ledger and margin tracking for CPaaS operations',
     }),
     new MakerZIP({}, ['win32']),
   ],
   plugins: [
+    new AutoUnpackNativesPlugin({}),
     new VitePlugin({
       build: [
         {
@@ -45,7 +52,7 @@ const config: ForgeConfig = {
       [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
       [FuseV1Options.EnableNodeCliInspectArguments]: false,
       [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
-      [FuseV1Options.OnlyLoadAppFromAsar]: true,
+      [FuseV1Options.OnlyLoadAppFromAsar]: false,
     }),
   ],
 };

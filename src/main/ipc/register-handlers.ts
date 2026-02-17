@@ -13,6 +13,7 @@ import { UploadBatchRepository } from '../database/repositories/upload-batch-rep
 import { AuditLogRepository } from '../database/repositories/audit-log-repository';
 import { CountryNormalizer } from '../services/country-normalizer';
 import { MarginEngine } from '../services/margin-engine';
+import { CsvProcessor } from '../workers/csv-processor';
 import * as Papa from 'papaparse';
 import * as fs from 'node:fs';
 import type { ColumnMapping, UploadType } from '../../shared/types';
@@ -31,6 +32,7 @@ export function registerIpcHandlers(db: Database.Database): void {
   const auditRepo = new AuditLogRepository(db);
   const normalizer = new CountryNormalizer(db);
   const marginEngine = new MarginEngine(db);
+  const csvProcessor = new CsvProcessor(db);
 
   // === Vendors ===
   ipcMain.handle('vendor:list', (_, params) => vendorRepo.list(params));
@@ -74,7 +76,7 @@ export function registerIpcHandlers(db: Database.Database): void {
     ledgerRepo.reverseEntry(params.entryId, params.reason),
   );
   ipcMain.handle('ledger:computeForBatch', (_, params) =>
-    marginEngine.computeForTrafficBatch(params.trafficBatchId),
+    marginEngine.computeForTrafficBatchAsync(params.trafficBatchId),
   );
   ipcMain.handle('ledger:export', async (_, params) => {
     const result = ledgerRepo.list({
@@ -109,6 +111,7 @@ export function registerIpcHandlers(db: Database.Database): void {
       params.source,
     );
     normalizer.reload();
+    csvProcessor.reloadNormalizer();
     return alias;
   });
   ipcMain.handle('country:pendingResolutions', () =>
@@ -117,6 +120,7 @@ export function registerIpcHandlers(db: Database.Database): void {
   ipcMain.handle('country:resolveMapping', (_, params) => {
     countryRepo.resolveMapping(params.resolutionId, params.countryCode);
     normalizer.reload();
+    csvProcessor.reloadNormalizer();
   });
 
   // === FX Rates ===
@@ -150,241 +154,26 @@ export function registerIpcHandlers(db: Database.Database): void {
       JSON.stringify(params.columnMapping),
     );
 
-    // Process synchronously in main process for MVP
-    // TODO: Move to utilityProcess for large files
-    try {
-      batchRepo.updateStatus(batch.id, 'processing');
-      const content = fs.readFileSync(params.filePath, 'utf-8');
-      const parsed = Papa.parse(content, {
-        header: true,
-        skipEmptyLines: true,
-      });
-
-      const rows = parsed.data as Record<string, string>[];
-      const colMap = new Map(
-        params.columnMapping
-          .filter((m) => m.dbField)
-          .map((m) => [m.dbField!, m.csvColumn]),
-      );
-
-      let inserted = 0;
-      let errorCount = 0;
-
-      db.transaction(() => {
-        for (let i = 0; i < rows.length; i++) {
-          try {
-            const row = rows[i];
-            const getValue = (field: string) => {
-              const csvCol = colMap.get(field);
-              return csvCol ? row[csvCol]?.trim() : undefined;
-            };
-
-            if (params.type === 'vendor_rate' && params.entityId) {
-              const rawCountry = getValue('country') || '';
-              const countryResult = normalizer.resolve(rawCountry);
-
-              if (countryResult.status === 'unresolved') {
-                countryRepo.addPendingResolution(
-                  rawCountry,
-                  batch.id,
-                  countryResult.countryCode,
-                  countryResult.confidence,
-                );
-                batchRepo.addError(
-                  batch.id,
-                  i + 2,
-                  JSON.stringify(row),
-                  'country_unknown',
-                  `Could not resolve country: "${rawCountry}"`,
-                );
-                errorCount++;
-                continue;
-              }
-
-              vendorRateRepo.insertWithVersioning({
-                vendor_id: params.entityId,
-                country_code: countryResult.countryCode!,
-                channel: (getValue('channel') || 'sms').toLowerCase() as never,
-                rate: parseFloat(getValue('rate') || '0'),
-                currency: getValue('currency') || 'USD',
-                effective_from: getValue('effective_from') || new Date().toISOString().slice(0, 10),
-                effective_to: getValue('effective_to') || undefined,
-                batch_id: batch.id,
-              });
-              inserted++;
-            } else if (params.type === 'client_rate' && params.entityId) {
-              const rawCountry = getValue('country') || '';
-              const countryResult = normalizer.resolve(rawCountry);
-
-              if (countryResult.status === 'unresolved') {
-                countryRepo.addPendingResolution(
-                  rawCountry,
-                  batch.id,
-                  countryResult.countryCode,
-                  countryResult.confidence,
-                );
-                batchRepo.addError(
-                  batch.id,
-                  i + 2,
-                  JSON.stringify(row),
-                  'country_unknown',
-                  `Could not resolve country: "${rawCountry}"`,
-                );
-                errorCount++;
-                continue;
-              }
-
-              clientRateRepo.insertWithVersioning({
-                client_id: params.entityId,
-                country_code: countryResult.countryCode!,
-                channel: (getValue('channel') || 'sms').toLowerCase() as never,
-                use_case: getValue('use_case') || 'default',
-                rate: parseFloat(getValue('rate') || '0'),
-                currency: getValue('currency') || 'USD',
-                contract_version: getValue('contract_version'),
-                effective_from: getValue('effective_from') || new Date().toISOString().slice(0, 10),
-                effective_to: getValue('effective_to') || undefined,
-                batch_id: batch.id,
-              });
-              inserted++;
-            } else if (params.type === 'traffic') {
-              const rawCountry = getValue('country') || '';
-              const countryResult = normalizer.resolve(rawCountry);
-
-              if (countryResult.status === 'unresolved') {
-                countryRepo.addPendingResolution(
-                  rawCountry,
-                  batch.id,
-                  countryResult.countryCode,
-                  countryResult.confidence,
-                );
-                batchRepo.addError(
-                  batch.id,
-                  i + 2,
-                  JSON.stringify(row),
-                  'country_unknown',
-                  `Could not resolve country: "${rawCountry}"`,
-                );
-                errorCount++;
-                continue;
-              }
-
-              const clientCode = getValue('client_code') || '';
-              const client = clientRepo.getByCode(clientCode);
-              if (!client) {
-                batchRepo.addError(
-                  batch.id,
-                  i + 2,
-                  JSON.stringify(row),
-                  'validation',
-                  `Unknown client code: "${clientCode}"`,
-                );
-                errorCount++;
-                continue;
-              }
-
-              db.prepare(
-                `INSERT INTO traffic_records
-                   (batch_id, client_id, country_code, channel, use_case, message_count, traffic_date)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-              ).run(
-                batch.id,
-                client.id,
-                countryResult.countryCode,
-                (getValue('channel') || 'sms').toLowerCase(),
-                getValue('use_case') || 'default',
-                parseInt(getValue('message_count') || '0', 10),
-                getValue('traffic_date') || new Date().toISOString().slice(0, 10),
-              );
-              inserted++;
-            } else if (params.type === 'routing') {
-              const rawCountry = getValue('country') || '';
-              const countryResult = normalizer.resolve(rawCountry);
-
-              if (countryResult.status === 'unresolved') {
-                countryRepo.addPendingResolution(rawCountry, batch.id, null, 0);
-                batchRepo.addError(batch.id, i + 2, JSON.stringify(row), 'country_unknown', `Could not resolve country: "${rawCountry}"`);
-                errorCount++;
-                continue;
-              }
-
-              const clientCode = getValue('client_code') || '';
-              const vendorCode = getValue('vendor_code') || '';
-              const client = clientRepo.getByCode(clientCode);
-              const vendor = vendorRepo.getByCode(vendorCode);
-
-              if (!client) {
-                batchRepo.addError(batch.id, i + 2, JSON.stringify(row), 'validation', `Unknown client code: "${clientCode}"`);
-                errorCount++;
-                continue;
-              }
-              if (!vendor) {
-                batchRepo.addError(batch.id, i + 2, JSON.stringify(row), 'validation', `Unknown vendor code: "${vendorCode}"`);
-                errorCount++;
-                continue;
-              }
-
-              routingRepo.create({
-                client_id: client.id,
-                country_code: countryResult.countryCode!,
-                channel: (getValue('channel') || 'sms').toLowerCase() as never,
-                use_case: getValue('use_case') || 'default',
-                vendor_id: vendor.id,
-                effective_from: getValue('effective_from') || new Date().toISOString().slice(0, 10),
-                effective_to: getValue('effective_to') || undefined,
-                batch_id: batch.id,
-              });
-              inserted++;
-            }
-          } catch (err) {
-            batchRepo.addError(
-              batch.id,
-              i + 2,
-              JSON.stringify(rows[i]),
-              'validation',
-              (err as Error).message,
-            );
-            errorCount++;
-          }
-
-          // Send progress
-          if (i % 500 === 0) {
-            event.sender.send('batch:progress', {
-              batchId: batch.id,
-              phase: 'processing',
-              processed: i,
-              total: rows.length,
-            });
-          }
-        }
-      })();
-
-      batchRepo.updateStatus(
-        batch.id,
-        errorCount > 0 ? 'completed_with_errors' : 'completed',
-        {
-          total_rows: rows.length,
-          processed_rows: rows.length,
-          inserted_rows: inserted,
-          error_rows: errorCount,
-        },
-      );
-
-      event.sender.send('batch:complete', {
+    // Process asynchronously using CsvProcessor (yields to event loop between batches)
+    const result = await csvProcessor.process(
+      {
+        type: params.type,
+        filePath: params.filePath,
+        entityId: params.entityId,
+        columnMapping: params.columnMapping,
         batchId: batch.id,
-        status: errorCount > 0 ? 'completed_with_errors' : 'completed',
-        insertedRows: inserted,
-        errorRows: errorCount,
-      });
-    } catch (err) {
-      batchRepo.updateStatus(batch.id, 'failed');
-      event.sender.send('batch:complete', {
-        batchId: batch.id,
-        status: 'failed',
-        insertedRows: 0,
-        errorRows: 0,
-      });
-    }
+      },
+      (progress) => {
+        event.sender.send('batch:progress', progress);
+      },
+    );
+
+    event.sender.send('batch:complete', {
+      batchId: batch.id,
+      status: result.status,
+      insertedRows: result.insertedRows,
+      errorRows: result.errorRows,
+    });
 
     return batchRepo.getById(batch.id);
   });

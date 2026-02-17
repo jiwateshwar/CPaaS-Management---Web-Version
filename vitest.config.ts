@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 import path from 'path';
 
 export default defineConfig({
@@ -8,11 +8,9 @@ export default defineConfig({
       '@main': path.resolve(__dirname, 'src/main'),
     },
   },
-  build: {
-    rollupOptions: {
-      external: [
-        'better-sqlite3',
-      ],
-    },
+  test: {
+    globals: true,
+    include: ['tests/**/*.test.ts'],
+    testTimeout: 10000,
   },
 });

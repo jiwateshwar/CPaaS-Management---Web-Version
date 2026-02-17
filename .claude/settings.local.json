@@ -9,7 +9,8 @@
       "Bash(taskkill:*)",
       "Bash(netstat:*)",
       "Bash(tasklist:*)",
-      "Bash(wmic process where ProcessId=44364 get CommandLine:*)"
+      "Bash(wmic process where ProcessId=44364 get CommandLine:*)",
+      "Bash(npx vitest run)"
     ]
   }
 }

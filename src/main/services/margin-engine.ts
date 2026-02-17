@@ -28,6 +28,71 @@ export class MarginEngine {
     this.trafficRepo = new TrafficRepository(db);
   }
 
+  /**
+   * Async version that yields to the event loop between batches of 500 records.
+   * Prevents UI freezing for large traffic batches.
+   */
+  async computeForTrafficBatchAsync(
+    trafficBatchId: number,
+    onProgress?: (p: ProgressData) => void,
+  ): Promise<ComputeResult> {
+    const records = this.trafficRepo.getByBatchId(trafficBatchId);
+    const errors: MarginComputeError[] = [];
+    let totalVendorCost = 0;
+    let totalClientRevenue = 0;
+    let totalMargin = 0;
+    let successCount = 0;
+
+    const BATCH_SIZE = 500;
+
+    for (let chunkStart = 0; chunkStart < records.length; chunkStart += BATCH_SIZE) {
+      const chunkEnd = Math.min(chunkStart + BATCH_SIZE, records.length);
+
+      // Yield to event loop between chunks
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      // Process this chunk in a transaction
+      this.db.transaction(() => {
+        for (let i = chunkStart; i < chunkEnd; i++) {
+          const tr = records[i];
+          const result = this.computeSingle(tr, errors);
+
+          if (result) {
+            this.ledgerRepo.insert(result);
+            totalVendorCost += result.vendor_cost;
+            totalClientRevenue += result.client_revenue;
+            totalMargin += result.margin;
+            successCount++;
+          }
+        }
+      })();
+
+      if (onProgress) {
+        onProgress({
+          batchId: trafficBatchId,
+          phase: 'computing_margins',
+          processed: chunkEnd,
+          total: records.length,
+        });
+      }
+    }
+
+    return {
+      totalRecords: records.length,
+      successCount,
+      errorCount: errors.length,
+      errors,
+      summary: {
+        totalVendorCost: round6(totalVendorCost),
+        totalClientRevenue: round6(totalClientRevenue),
+        totalMargin: round6(totalMargin),
+      },
+    };
+  }
+
+  /**
+   * Synchronous version for smaller batches or test usage.
+   */
   computeForTrafficBatch(
     trafficBatchId: number,
     onProgress?: (p: ProgressData) => void,
