@@ -5,11 +5,22 @@ import { AutoUnpackNativesPlugin } from '@electron-forge/plugin-auto-unpack-nati
 import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
+import fs from 'fs';
+import path from 'path';
+
+/** Copy a native node module (and its deps) into the packaged app */
+function copyNativeModule(appDir: string, moduleName: string) {
+  const src = path.join(__dirname, 'node_modules', moduleName);
+  const dest = path.join(appDir, 'node_modules', moduleName);
+  if (fs.existsSync(src)) {
+    fs.cpSync(src, dest, { recursive: true });
+  }
+}
 
 const config: ForgeConfig = {
   packagerConfig: {
     asar: {
-      unpack: '**/{better-sqlite3,bindings,file-uri-to-path}/**/*',
+      unpack: '**/node_modules/{better-sqlite3,bindings,file-uri-to-path}/**/*',
     },
     name: 'CPaaS Management',
     executableName: 'cpaas-management',
@@ -17,6 +28,14 @@ const config: ForgeConfig = {
     appVersion: '1.0.0',
   },
   rebuildConfig: {},
+  hooks: {
+    packageAfterCopy: async (_config, appDir) => {
+      // Copy native modules that are externalized from Vite bundle
+      copyNativeModule(appDir, 'better-sqlite3');
+      copyNativeModule(appDir, 'bindings');
+      copyNativeModule(appDir, 'file-uri-to-path');
+    },
+  },
   makers: [
     new MakerSquirrel({
       name: 'cpaas-management',

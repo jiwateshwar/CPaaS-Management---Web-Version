@@ -11,7 +11,8 @@
       "Bash(tasklist:*)",
       "Bash(wmic process where ProcessId=44364 get CommandLine:*)",
       "Bash(npx vitest run)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(npx @electron/asar list:*)"
     ]
   }
 }
