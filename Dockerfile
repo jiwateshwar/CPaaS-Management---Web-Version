@@ -21,4 +21,4 @@ COPY --from=build /app/dist-server ./dist-server
 RUN mkdir -p /app/data /app/uploads
 
 EXPOSE 3000
-CMD ["node", "dist-server/index.js"]
+CMD ["node", "dist-server/server/index.js"]
