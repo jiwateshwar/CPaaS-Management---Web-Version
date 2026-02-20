@@ -13,6 +13,7 @@ import { AuditLogRepository } from '../main/database/repositories/audit-log-repo
 import { CountryNormalizer } from '../main/services/country-normalizer';
 import { MarginEngine } from '../main/services/margin-engine';
 import type { IpcChannel, IpcChannelMap } from '../shared/ipc-channels';
+import type { MarginByCountry, MarginByClient, MarginTrend } from '../shared/types';
 
 export type IpcHandlerMap = {
   [K in IpcChannel]?: (
@@ -154,7 +155,7 @@ export function createIpcHandlers(db: Database.Database): IpcHandlerMap {
           ORDER BY margin DESC
           LIMIT 15`,
         )
-        .all(monthStart, monthEnd);
+        .all(monthStart, monthEnd) as MarginByCountry[];
     },
 
     'dashboard:marginByClient': (params) => {
@@ -176,7 +177,7 @@ export function createIpcHandlers(db: Database.Database): IpcHandlerMap {
           GROUP BY ml.client_id
           ORDER BY margin DESC`,
         )
-        .all(monthStart, monthEnd);
+        .all(monthStart, monthEnd) as MarginByClient[];
     },
 
     'dashboard:marginTrend': (params) =>
@@ -192,7 +193,7 @@ export function createIpcHandlers(db: Database.Database): IpcHandlerMap {
           ORDER BY month DESC
           LIMIT ?`,
         )
-        .all(params.months),
+        .all(params.months) as MarginTrend[],
 
     // File Dialog stubs for web (not used by UI)
     'dialog:openFile': async () => null,

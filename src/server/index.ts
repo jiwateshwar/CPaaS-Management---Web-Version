@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import multer from 'multer';
@@ -34,22 +34,22 @@ const ipcHandlers = createIpcHandlers(db);
 const ledgerRepo = new MarginLedgerRepository(db);
 const batchRepo = new UploadBatchRepository(db);
 
-app.get('/api/health', (_req, res) => res.json({ ok: true }));
+app.get('/api/health', (_req: Request, res: Response) => res.json({ ok: true }));
 
-app.get('/api/system/info', (_req, res) => {
+app.get('/api/system/info', (_req: Request, res: Response) => {
   res.json({
     dbPath: getDatabasePath(),
     version: process.env.npm_package_version ?? '1.0.0',
   });
 });
 
-app.get('/api/system/backup', (_req, res) => {
+app.get('/api/system/backup', (_req: Request, res: Response) => {
   const dbPath = getDatabasePath();
   const filename = path.basename(dbPath);
   res.download(dbPath, filename);
 });
 
-app.post('/api/ipc/:channel', async (req, res) => {
+app.post('/api/ipc/:channel', async (req: Request, res: Response) => {
   const channel = req.params.channel;
   const handler = ipcHandlers[channel as keyof typeof ipcHandlers];
   if (!handler) {
@@ -65,7 +65,7 @@ app.post('/api/ipc/:channel', async (req, res) => {
   }
 });
 
-app.get('/api/ledger/export', (req, res) => {
+app.get('/api/ledger/export', (req: Request, res: Response) => {
   const params = {
     client_id: req.query.client_id ? Number(req.query.client_id) : undefined,
     vendor_id: req.query.vendor_id ? Number(req.query.vendor_id) : undefined,
@@ -88,7 +88,7 @@ app.get('/api/ledger/export', (req, res) => {
   res.send(csv);
 });
 
-app.post('/api/upload/preview', upload.single('file'), (req, res) => {
+app.post('/api/upload/preview', upload.single('file'), (req: Request, res: Response) => {
   if (!req.file) {
     res.status(400).json({ error: 'Missing file' });
     return;
@@ -115,7 +115,7 @@ app.post('/api/upload/preview', upload.single('file'), (req, res) => {
   }
 });
 
-app.post('/api/upload/start', upload.single('file'), async (req, res) => {
+app.post('/api/upload/start', upload.single('file'), async (req: Request, res: Response) => {
   if (!req.file) {
     res.status(400).json({ error: 'Missing file' });
     return;
@@ -155,7 +155,7 @@ app.post('/api/upload/start', upload.single('file'), async (req, res) => {
 
 const clientDir = path.join(process.cwd(), 'dist');
 app.use(express.static(clientDir));
-app.get('*', (_req, res) => {
+app.get('*', (_req: Request, res: Response) => {
   res.sendFile(path.join(clientDir, 'index.html'));
 });
 
