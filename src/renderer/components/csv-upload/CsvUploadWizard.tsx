@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -17,8 +17,9 @@ import {
   SelectValue,
 } from '../ui/select';
 import { Upload, FileText, ArrowRight, ArrowLeft, Check, AlertCircle, Loader2, Download } from 'lucide-react';
-import type { FieldDef, ColumnMapping, CsvPreview, UploadBatch, UploadType, ProgressData, BatchCompleteEvent } from '../../../shared/types';
+import type { FieldDef, ColumnMapping, CsvPreview, UploadBatch, UploadType, ProgressData } from '../../../shared/types';
 import { SAMPLE_CSV_DATA } from '../../../shared/constants/sample-csv';
+import { uploadPreview, uploadStart } from '../../lib/api';
 
 type WizardStep = 'select' | 'mapping' | 'processing' | 'complete';
 
@@ -42,19 +43,20 @@ export function CsvUploadWizard({
   onComplete,
 }: CsvUploadWizardProps) {
   const [step, setStep] = useState<WizardStep>('select');
-  const [filePath, setFilePath] = useState<string | null>(null);
+  const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<CsvPreview | null>(null);
   const [columnMapping, setColumnMapping] = useState<ColumnMapping[]>([]);
   const [progress, setProgress] = useState<ProgressData | null>(null);
   const [result, setResult] = useState<UploadBatch | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Reset state when dialog opens/closes
   useEffect(() => {
     if (open) {
       setStep('select');
-      setFilePath(null);
+      setFile(null);
       setPreview(null);
       setColumnMapping([]);
       setProgress(null);
@@ -64,22 +66,9 @@ export function CsvUploadWizard({
     }
   }, [open]);
 
-  // Listen for progress and completion events
   useEffect(() => {
-    const cleanupProgress = window.electronAPI.onProgress((data: ProgressData) => {
-      setProgress(data);
-    });
-
-    const cleanupComplete = window.electronAPI.onBatchComplete((data: BatchCompleteEvent) => {
-      setStep('complete');
-      setLoading(false);
-    });
-
-    return () => {
-      cleanupProgress();
-      cleanupComplete();
-    };
-  }, []);
+    setProgress(null);
+  }, [file]);
 
   const handleDownloadSample = () => {
     const sample = SAMPLE_CSV_DATA[uploadType];
@@ -95,27 +84,27 @@ export function CsvUploadWizard({
     URL.revokeObjectURL(url);
   };
 
-  const handleSelectFile = async () => {
-    const path = await window.electronAPI.invoke('dialog:openFile', {
-      filters: [{ name: 'CSV Files', extensions: ['csv', 'txt'] }],
-    });
+  const handleSelectFile = () => {
+    fileInputRef.current?.click();
+  };
 
-    if (path) {
-      setFilePath(path);
-      setLoading(true);
-      setError(null);
-      try {
-        const csvPreview = await window.electronAPI.invoke('upload:preview', { filePath: path });
-        setPreview(csvPreview);
-        // Auto-map columns by matching header names to field names
-        const autoMapping = autoMapColumns(csvPreview.headers, fieldDefs);
-        setColumnMapping(autoMapping);
-        setStep('mapping');
-      } catch (err) {
-        setError((err as Error).message);
-      } finally {
-        setLoading(false);
-      }
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = event.target.files?.[0];
+    if (!selected) return;
+
+    setFile(selected);
+    setLoading(true);
+    setError(null);
+    try {
+      const csvPreview = await uploadPreview(selected);
+      setPreview(csvPreview);
+      const autoMapping = autoMapColumns(csvPreview.headers, fieldDefs);
+      setColumnMapping(autoMapping);
+      setStep('mapping');
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -135,14 +124,14 @@ export function CsvUploadWizard({
   );
 
   const handleStartUpload = async () => {
-    if (!filePath) return;
+    if (!file) return;
     setStep('processing');
     setLoading(true);
     setError(null);
     try {
-      const batch = await window.electronAPI.invoke('upload:start', {
+      const batch = await uploadStart({
+        file,
         type: uploadType,
-        filePath,
         entityId,
         columnMapping,
       });
@@ -218,6 +207,13 @@ export function CsvUploadWizard({
                 )}
                 Choose File
               </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,.txt"
+                className="hidden"
+                onChange={handleFileChange}
+              />
               <Button variant="outline" onClick={handleDownloadSample}>
                 <Download className="h-4 w-4 mr-2" />
                 Download Sample
@@ -230,7 +226,7 @@ export function CsvUploadWizard({
         {step === 'mapping' && preview && (
           <div className="space-y-4">
             <div className="flex items-center justify-between text-sm text-muted-foreground">
-              <span>File: {filePath?.split(/[\\/]/).pop()}</span>
+              <span>File: {file?.name}</span>
               <span>~{preview.totalRowEstimate.toLocaleString()} rows</span>
             </div>
 

@@ -1,26 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Database, Download, Check, AlertCircle } from 'lucide-react';
+import { downloadBackup, getSystemInfo } from '../lib/api';
 
 export function SettingsPage() {
   const [backupStatus, setBackupStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [backupPath, setBackupPath] = useState('');
+  const [dbPath, setDbPath] = useState('data/cpaas-ledger.db');
+  const [version, setVersion] = useState('1.0.0');
+
+  useEffect(() => {
+    getSystemInfo()
+      .then((info) => {
+        setDbPath(info.dbPath);
+        setVersion(info.version);
+      })
+      .catch(() => undefined);
+  }, []);
 
   const handleBackup = async () => {
     try {
-      const defaultName = `cpaas-backup-${new Date().toISOString().slice(0, 10)}.db`;
-      const savePath = await window.electronAPI.invoke('dialog:saveFile', {
-        defaultPath: defaultName,
-        filters: [{ name: 'SQLite Database', extensions: ['db'] }],
-      });
-
-      if (savePath) {
-        // For now, we just show success - the actual backup would need a new IPC channel
-        setBackupPath(savePath);
-        setBackupStatus('success');
-      }
+      await downloadBackup();
+      setBackupPath(`cpaas-backup-${new Date().toISOString().slice(0, 10)}.db`);
+      setBackupStatus('success');
     } catch {
       setBackupStatus('error');
     }
@@ -43,7 +47,7 @@ export function SettingsPage() {
             <div>
               <label className="text-sm font-medium">Database Location</label>
               <p className="text-sm text-muted-foreground mt-1 font-mono bg-muted px-3 py-2 rounded">
-                %APPDATA%/cpaas-management/cpaas-ledger.db
+                {dbPath}
               </p>
             </div>
             <div>
@@ -98,7 +102,7 @@ export function SettingsPage() {
           </CardHeader>
           <CardContent>
             <p className="text-sm">
-              <strong>CPaaS Management</strong> v1.0.0
+              <strong>CPaaS Management</strong> v{version}
             </p>
             <p className="text-sm text-muted-foreground mt-1">
               Financial ledger and margin tracking system for CPaaS operations.

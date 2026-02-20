@@ -1,0 +1,8 @@
+node_modules
+dist
+dist-server
+out
+.git
+.vscode
+.idea
+*.log

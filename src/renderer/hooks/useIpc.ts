@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { IpcChannelMap, IpcChannel } from '../../shared/ipc-channels';
 import { toast } from './useToast';
+import { invoke } from '../lib/api';
 
 interface UseIpcQueryResult<T> {
   data: T | null;
@@ -23,7 +24,7 @@ export function useIpcQuery<C extends IpcChannel>(
     setLoading(true);
     setError(null);
     try {
-      const result = await window.electronAPI.invoke(channel, params);
+      const result = await invoke(channel, params);
       setData(result);
     } catch (err) {
       setError((err as Error).message);
@@ -55,7 +56,7 @@ export function useIpcMutation<C extends IpcChannel>(
       setLoading(true);
       setError(null);
       try {
-        const result = await window.electronAPI.invoke(channel, params);
+        const result = await invoke(channel, params);
         if (opts?.successMessage) {
           toast(opts.successMessage, { variant: 'success' });
         }

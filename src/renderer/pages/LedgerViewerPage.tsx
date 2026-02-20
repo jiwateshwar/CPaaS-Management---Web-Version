@@ -16,8 +16,9 @@ import { DataTable } from '../components/data-table/DataTable';
 import { PageHeader } from '../components/layout/PageHeader';
 import { useIpcQuery, useIpcMutation } from '../hooks/useIpc';
 import type { MarginLedgerEntry } from '../../shared/types';
-import { formatCurrency, formatRate, formatDate, formatNumber } from '../lib/utils';
+import { formatCurrency, formatDate, formatNumber } from '../lib/utils';
 import { Download, RotateCcw, DollarSign, TrendingUp, TrendingDown, Hash } from 'lucide-react';
+import { downloadLedgerExport } from '../lib/api';
 
 const columns: ColumnDef<MarginLedgerEntry, unknown>[] = [
   { accessorKey: 'id', header: 'ID', size: 60 },
@@ -70,8 +71,8 @@ export function LedgerViewerPage() {
     [page, dateFrom, dateTo, includeReversals],
   );
 
-  const { mutate: exportLedger } = useIpcMutation('ledger:export', { successMessage: 'Ledger exported successfully' });
   const { mutate: reverseEntry, loading: reversing } = useIpcMutation('ledger:reverseEntry', { successMessage: 'Reversal entry created' });
+  const [exporting, setExporting] = useState(false);
 
   const handleReverse = async () => {
     if (!reversalTarget || !reversalReason.trim()) return;
@@ -122,9 +123,23 @@ export function LedgerViewerPage() {
         title="Margin Ledger"
         description="Immutable financial ledger - computed margins for all traffic"
         actions={
-          <Button variant="outline" onClick={() => exportLedger({})}>
+          <Button
+            variant="outline"
+            disabled={exporting}
+            onClick={async () => {
+              setExporting(true);
+              try {
+                await downloadLedgerExport({
+                  date_from: dateFrom || undefined,
+                  date_to: dateTo || undefined,
+                });
+              } finally {
+                setExporting(false);
+              }
+            }}
+          >
             <Download className="h-4 w-4 mr-2" />
-            Export CSV
+            {exporting ? 'Exporting...' : 'Export CSV'}
           </Button>
         }
       />

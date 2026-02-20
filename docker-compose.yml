@@ -1,0 +1,19 @@
+version: '3.8'
+services:
+  cpaas-web:
+    build: .
+    container_name: cpaas-management-web
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - DB_DIR=/data
+      - UPLOAD_DIR=/uploads
+    volumes:
+      - cpaas-data:/data
+      - cpaas-uploads:/uploads
+    restart: unless-stopped
+
+volumes:
+  cpaas-data:
+  cpaas-uploads:

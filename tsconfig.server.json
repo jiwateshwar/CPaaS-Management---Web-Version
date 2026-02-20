@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist-server",
+    "lib": ["ESNext"],
+    "types": ["node"]
+  },
+  "include": [
+    "src/server/**/*",
+    "src/shared/**/*",
+    "src/main/database/**/*",
+    "src/main/services/**/*",
+    "src/main/workers/csv-processor.ts"
+  ],
+  "exclude": [
+    "src/main/index.ts",
+    "src/main/preload.ts",
+    "src/main/ipc/**/*",
+    "src/main/workers/spawn-worker.ts",
+    "src/renderer/**/*"
+  ]
+}
