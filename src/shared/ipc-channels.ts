@@ -10,6 +10,7 @@ import type {
   UpdateClientDto,
   ClientListParams,
   VendorRate,
+  CreateVendorRateDto,
   VendorRateListParams,
   ClientRate,
   ClientRateListParams,
