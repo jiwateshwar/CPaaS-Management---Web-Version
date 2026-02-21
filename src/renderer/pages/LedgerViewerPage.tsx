@@ -27,7 +27,11 @@ const columns: ColumnDef<MarginLedgerEntry, unknown>[] = [
   { accessorKey: 'vendor_name', header: 'Vendor' },
   { accessorKey: 'country_name', header: 'Country' },
   { accessorKey: 'channel', header: 'Ch.' },
-  { accessorKey: 'message_count', header: 'Msgs', cell: ({ getValue }) => formatNumber(getValue() as number) },
+  { accessorKey: 'setup_count', header: 'Setup', cell: ({ getValue }) => formatNumber(getValue() as number) },
+  { accessorKey: 'monthly_count', header: 'Monthly', cell: ({ getValue }) => formatNumber(getValue() as number) },
+  { accessorKey: 'mt_count', header: 'MT', cell: ({ getValue }) => formatNumber(getValue() as number) },
+  { accessorKey: 'mo_count', header: 'MO', cell: ({ getValue }) => formatNumber(getValue() as number) },
+  { accessorKey: 'message_count', header: 'Total', cell: ({ getValue }) => formatNumber(getValue() as number) },
   { accessorKey: 'vendor_cost', header: 'V.Cost', cell: ({ getValue }) => formatCurrency(getValue() as number) },
   { accessorKey: 'client_revenue', header: 'Revenue', cell: ({ getValue }) => formatCurrency(getValue() as number) },
   {
@@ -86,12 +90,16 @@ export function LedgerViewerPage() {
   const pageData = data?.data ?? [];
   const totals = pageData.reduce(
     (acc, row) => ({
+      setup: acc.setup + (row.setup_count ?? 0),
+      monthly: acc.monthly + (row.monthly_count ?? 0),
+      mt: acc.mt + (row.mt_count ?? 0),
+      mo: acc.mo + (row.mo_count ?? 0),
       messages: acc.messages + (row.message_count ?? 0),
       cost: acc.cost + (row.vendor_cost ?? 0),
       revenue: acc.revenue + (row.client_revenue ?? 0),
       margin: acc.margin + (row.margin ?? 0),
     }),
-    { messages: 0, cost: 0, revenue: 0, margin: 0 },
+    { setup: 0, monthly: 0, mt: 0, mo: 0, messages: 0, cost: 0, revenue: 0, margin: 0 },
   );
 
   const actionColumns: ColumnDef<MarginLedgerEntry, unknown>[] = [
@@ -177,34 +185,62 @@ export function LedgerViewerPage() {
 
       {/* Page totals */}
       {pageData.length > 0 && (
-        <div className="grid grid-cols-4 gap-3 mb-4">
-          <Card className="p-3">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-              <Hash className="h-3 w-3" /> Messages (page)
-            </div>
-            <p className="text-lg font-semibold">{formatNumber(totals.messages)}</p>
-          </Card>
-          <Card className="p-3">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-              <TrendingDown className="h-3 w-3" /> Cost (page)
-            </div>
-            <p className="text-lg font-semibold">{formatCurrency(totals.cost)}</p>
-          </Card>
-          <Card className="p-3">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-              <TrendingUp className="h-3 w-3" /> Revenue (page)
-            </div>
-            <p className="text-lg font-semibold">{formatCurrency(totals.revenue)}</p>
-          </Card>
-          <Card className="p-3">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-              <DollarSign className="h-3 w-3" /> Margin (page)
-            </div>
-            <p className={`text-lg font-semibold ${totals.margin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {formatCurrency(totals.margin)}
-            </p>
-          </Card>
-        </div>
+        <>
+          <div className="grid grid-cols-5 gap-3 mb-3">
+            <Card className="p-3">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                <Hash className="h-3 w-3" /> Setup (page)
+              </div>
+              <p className="text-lg font-semibold">{formatNumber(totals.setup)}</p>
+            </Card>
+            <Card className="p-3">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                <Hash className="h-3 w-3" /> Monthly (page)
+              </div>
+              <p className="text-lg font-semibold">{formatNumber(totals.monthly)}</p>
+            </Card>
+            <Card className="p-3">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                <Hash className="h-3 w-3" /> MT (page)
+              </div>
+              <p className="text-lg font-semibold">{formatNumber(totals.mt)}</p>
+            </Card>
+            <Card className="p-3">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                <Hash className="h-3 w-3" /> MO (page)
+              </div>
+              <p className="text-lg font-semibold">{formatNumber(totals.mo)}</p>
+            </Card>
+            <Card className="p-3">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                <Hash className="h-3 w-3" /> Total (page)
+              </div>
+              <p className="text-lg font-semibold">{formatNumber(totals.messages)}</p>
+            </Card>
+          </div>
+          <div className="grid grid-cols-4 gap-3 mb-4">
+            <Card className="p-3">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                <TrendingDown className="h-3 w-3" /> Cost (page)
+              </div>
+              <p className="text-lg font-semibold">{formatCurrency(totals.cost)}</p>
+            </Card>
+            <Card className="p-3">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                <TrendingUp className="h-3 w-3" /> Revenue (page)
+              </div>
+              <p className="text-lg font-semibold">{formatCurrency(totals.revenue)}</p>
+            </Card>
+            <Card className="p-3">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                <DollarSign className="h-3 w-3" /> Margin (page)
+              </div>
+              <p className={`text-lg font-semibold ${totals.margin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {formatCurrency(totals.margin)}
+              </p>
+            </Card>
+          </div>
+        </>
       )}
 
       <DataTable

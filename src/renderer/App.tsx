@@ -7,6 +7,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { VendorListPage } from './pages/VendorListPage';
 import { ClientListPage } from './pages/ClientListPage';
 import { RoutingPage } from './pages/RoutingPage';
+import { RatesPage } from './pages/RatesPage';
 import { UploadCenterPage } from './pages/UploadCenterPage';
 import { LedgerViewerPage } from './pages/LedgerViewerPage';
 import { CountryMappingPage } from './pages/CountryMappingPage';
@@ -24,6 +25,7 @@ export function App() {
           <Route path="/vendors" element={<VendorListPage />} />
           <Route path="/clients" element={<ClientListPage />} />
           <Route path="/routing" element={<RoutingPage />} />
+          <Route path="/rates" element={<RatesPage />} />
           <Route path="/uploads" element={<UploadCenterPage />} />
           <Route path="/ledger" element={<LedgerViewerPage />} />
           <Route path="/countries" element={<CountryMappingPage />} />

@@ -17,7 +17,17 @@ import {
   SelectValue,
 } from '../ui/select';
 import { Upload, FileText, ArrowRight, ArrowLeft, Check, AlertCircle, Loader2, Download } from 'lucide-react';
-import type { FieldDef, ColumnMapping, CsvPreview, UploadBatch, UploadType, ProgressData } from '../../../shared/types';
+import type {
+  FieldDef,
+  ColumnMapping,
+  CsvPreview,
+  UploadBatch,
+  UploadType,
+  ProgressData,
+  VendorRateZeroHandling,
+  VendorZeroRateAction,
+} from '../../../shared/types';
+import Papa from 'papaparse';
 import { SAMPLE_CSV_DATA } from '../../../shared/constants/sample-csv';
 import { uploadPreview, uploadStart } from '../../lib/api';
 
@@ -50,6 +60,9 @@ export function CsvUploadWizard({
   const [result, setResult] = useState<UploadBatch | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [zeroRateKeys, setZeroRateKeys] = useState<Array<{ key: string; country: string; channel: string; useCase: string }>>([]);
+  const [zeroRateHandling, setZeroRateHandling] = useState<VendorZeroRateAction | 'manual'>('use_past');
+  const [zeroRatePerKey, setZeroRatePerKey] = useState<Record<string, VendorZeroRateAction>>({});
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Reset state when dialog opens/closes
@@ -63,6 +76,9 @@ export function CsvUploadWizard({
       setResult(null);
       setError(null);
       setLoading(false);
+      setZeroRateKeys([]);
+      setZeroRateHandling('use_past');
+      setZeroRatePerKey({});
     }
   }, [open]);
 
@@ -100,6 +116,17 @@ export function CsvUploadWizard({
       setPreview(csvPreview);
       const autoMapping = autoMapColumns(csvPreview.headers, fieldDefs);
       setColumnMapping(autoMapping);
+      if (uploadType === 'vendor_rate') {
+        const zeroKeys = await detectZeroRateKeys(selected);
+        setZeroRateKeys(zeroKeys);
+        if (zeroKeys.length > 0) {
+          const defaults: Record<string, VendorZeroRateAction> = {};
+          for (const item of zeroKeys) {
+            defaults[item.key] = 'use_past';
+          }
+          setZeroRatePerKey(defaults);
+        }
+      }
       setStep('mapping');
     } catch (err) {
       setError((err as Error).message);
@@ -129,11 +156,18 @@ export function CsvUploadWizard({
     setLoading(true);
     setError(null);
     try {
+      const vendorRateZeroHandling: VendorRateZeroHandling | undefined =
+        uploadType === 'vendor_rate' && zeroRateKeys.length > 0
+          ? zeroRateHandling === 'manual'
+            ? { defaultAction: 'use_past', perKey: zeroRatePerKey }
+            : { defaultAction: zeroRateHandling }
+          : undefined;
       const batch = await uploadStart({
         file,
         type: uploadType,
         entityId,
         columnMapping,
+        vendorRateZeroHandling,
       });
       setResult(batch);
       setStep('complete');
@@ -149,7 +183,12 @@ export function CsvUploadWizard({
   const requiredFields = fieldDefs.filter((f) => f.required);
   const mappedDbFields = new Set(columnMapping.map((m) => m.dbField).filter(Boolean));
   const missingRequired = requiredFields.filter((f) => !mappedDbFields.has(f.name));
-  const canProceed = missingRequired.length === 0;
+  const missingZeroDecisions =
+    uploadType === 'vendor_rate' &&
+    zeroRateKeys.length > 0 &&
+    zeroRateHandling === 'manual' &&
+    zeroRateKeys.some((k) => !zeroRatePerKey[k.key]);
+  const canProceed = missingRequired.length === 0 && !missingZeroDecisions;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -229,6 +268,79 @@ export function CsvUploadWizard({
               <span>File: {file?.name}</span>
               <span>~{preview.totalRowEstimate.toLocaleString()} rows</span>
             </div>
+
+            {uploadType === 'vendor_rate' && zeroRateKeys.length > 0 && (
+              <div className="border rounded-lg p-4 bg-muted/30 space-y-3">
+                <div className="text-sm">
+                  <p className="font-medium">Unquoted vendor rates detected</p>
+                  <p className="text-muted-foreground">
+                    {zeroRateKeys.length} row(s) have total fee &le; 0. Choose how to handle them.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Select
+                    value={zeroRateHandling}
+                    onValueChange={(val) => setZeroRateHandling(val as VendorZeroRateAction | 'manual')}
+                  >
+                    <SelectTrigger className="h-9 w-72 text-sm">
+                      <SelectValue placeholder="Select handling" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="use_past">Use past rates (batch)</SelectItem>
+                      <SelectItem value="discontinue">Discontinue vendor (batch)</SelectItem>
+                      <SelectItem value="manual">Decide per country/use case</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {zeroRateHandling === 'manual' && (
+                  <div className="border rounded-md overflow-hidden bg-background">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-muted/50">
+                          <th className="text-left p-2 font-medium">Country</th>
+                          <th className="text-left p-2 font-medium">Channel</th>
+                          <th className="text-left p-2 font-medium">Use Case</th>
+                          <th className="text-left p-2 font-medium">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {zeroRateKeys.map((row) => (
+                          <tr key={row.key} className="border-b last:border-0">
+                            <td className="p-2">{row.country}</td>
+                            <td className="p-2">{row.channel}</td>
+                            <td className="p-2">{row.useCase}</td>
+                            <td className="p-2">
+                              <Select
+                                value={zeroRatePerKey[row.key] ?? '__unset__'}
+                                onValueChange={(val) =>
+                                  setZeroRatePerKey((prev) => ({
+                                    ...prev,
+                                    [row.key]: val as VendorZeroRateAction,
+                                  }))
+                                }
+                              >
+                                <SelectTrigger className="h-8 text-xs w-48">
+                                  <SelectValue placeholder="Select action" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="use_past">Use past rates</SelectItem>
+                                  <SelectItem value="discontinue">Discontinue vendor</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {missingZeroDecisions && (
+                  <p className="text-sm text-destructive">Select an action for each row.</p>
+                )}
+              </div>
+            )}
 
             {/* Mapping table */}
             <div className="border rounded-lg overflow-hidden">
@@ -444,4 +556,32 @@ function autoMapColumns(headers: string[], fieldDefs: FieldDef[]): ColumnMapping
   }
 
   return mappings;
+}
+
+async function detectZeroRateKeys(file: File): Promise<Array<{ key: string; country: string; channel: string; useCase: string }>> {
+  const text = await file.text();
+  const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+  const rows = parsed.data as Record<string, string>[];
+  const seen = new Map<string, { country: string; channel: string; useCase: string }>();
+
+  for (const row of rows) {
+    const countryRaw = (row.country || row.Country || '').trim();
+    const channelRaw = (row.channel || row.Channel || '').trim();
+    const useCaseRaw = (row.use_case || row.useCase || row['Use Case'] || 'default').trim();
+    if (!countryRaw || !channelRaw) continue;
+
+    const setupFee = parseFloat((row.setup_fee || row['Setup Fee'] || '0') as string) || 0;
+    const monthlyFee = parseFloat((row.monthly_fee || row['Monthly Fee'] || '0') as string) || 0;
+    const mtFee = parseFloat((row.mt_fee || row['MT Fee'] || '0') as string) || 0;
+    const moFee = parseFloat((row.mo_fee || row['MO Fee'] || '0') as string) || 0;
+    const total = setupFee + monthlyFee + mtFee + moFee;
+    if (total > 0) continue;
+
+    const key = `${countryRaw.toLowerCase()}|${channelRaw.toLowerCase()}|${useCaseRaw.toLowerCase()}`;
+    if (!seen.has(key)) {
+      seen.set(key, { country: countryRaw, channel: channelRaw, useCase: useCaseRaw });
+    }
+  }
+
+  return Array.from(seen.entries()).map(([key, value]) => ({ key, ...value }));
 }

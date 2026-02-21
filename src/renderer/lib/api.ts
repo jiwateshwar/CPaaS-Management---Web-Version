@@ -1,5 +1,5 @@
 import type { IpcChannel, IpcChannelMap } from '../../shared/ipc-channels';
-import type { ColumnMapping, UploadBatch, CsvPreview } from '../../shared/types';
+import type { ColumnMapping, UploadBatch, CsvPreview, VendorRateZeroHandling } from '../../shared/types';
 
 const API_BASE = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '');
 
@@ -37,6 +37,7 @@ export async function uploadStart(opts: {
   type: string;
   entityId?: number;
   columnMapping: ColumnMapping[];
+  vendorRateZeroHandling?: VendorRateZeroHandling;
 }): Promise<UploadBatch> {
   const formData = new FormData();
   formData.append('file', opts.file);
@@ -45,6 +46,9 @@ export async function uploadStart(opts: {
     formData.append('entityId', String(opts.entityId));
   }
   formData.append('columnMapping', JSON.stringify(opts.columnMapping));
+  if (opts.vendorRateZeroHandling) {
+    formData.append('vendorRateZeroHandling', JSON.stringify(opts.vendorRateZeroHandling));
+  }
 
   return requestJson<UploadBatch>('/api/upload/start', {
     method: 'POST',

@@ -51,3 +51,10 @@ export interface FieldDef {
   type: 'string' | 'decimal' | 'integer' | 'date' | 'country' | 'channel' | 'currency';
   default?: string;
 }
+
+export type VendorZeroRateAction = 'use_past' | 'discontinue';
+
+export interface VendorRateZeroHandling {
+  defaultAction: VendorZeroRateAction;
+  perKey?: Record<string, VendorZeroRateAction>;
+}

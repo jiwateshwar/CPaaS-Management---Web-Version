@@ -51,8 +51,58 @@ export function createIpcHandlers(db: Database.Database): IpcHandlerMap {
 
     // Vendor Rates
     'vendorRate:list': (params) => vendorRateRepo.list(params),
+    'vendorRate:create': (params) => {
+      const useCase = params.use_case ?? 'default';
+      const totalFee = params.setup_fee + params.monthly_fee + params.mt_fee + params.mo_fee;
+      if (totalFee <= 0) {
+        const action = params.zero_action ?? 'use_past';
+        if (action === 'use_past') {
+          const past = vendorRateRepo.getMostRecentBefore(
+            params.vendor_id,
+            params.country_code,
+            params.channel,
+            useCase,
+            params.effective_from,
+          );
+          if (past) {
+            return vendorRateRepo.insertWithVersioning({
+              ...params,
+              use_case: useCase,
+              setup_fee: past.setup_fee,
+              monthly_fee: past.monthly_fee,
+              mt_fee: past.mt_fee,
+              mo_fee: past.mo_fee,
+              currency: past.currency,
+              notes: composeNotes(params.notes, `Used past rate #${past.id}`),
+              discontinued: 0,
+            });
+          }
+        }
+        return vendorRateRepo.insertWithVersioning({
+          ...params,
+          use_case: useCase,
+          setup_fee: 0,
+          monthly_fee: 0,
+          mt_fee: 0,
+          mo_fee: 0,
+          notes: composeNotes(params.notes, 'Discontinued - no quoted rate'),
+          discontinued: 1,
+        });
+      }
+      return vendorRateRepo.insertWithVersioning({
+        ...params,
+        use_case: useCase,
+        discontinued: 0,
+      });
+    },
     'vendorRate:getEffective': (params) =>
-      vendorRateRepo.getEffective(params.vendorId, params.countryCode, params.channel, params.date),
+      vendorRateRepo.getEffective(
+        params.vendorId,
+        params.countryCode,
+        params.channel,
+        params.useCase,
+        params.date,
+      ),
 
     // Client Rates
     'clientRate:list': (params) => clientRateRepo.list(params),
@@ -199,4 +249,9 @@ export function createIpcHandlers(db: Database.Database): IpcHandlerMap {
     'dialog:openFile': async () => null,
     'dialog:saveFile': async () => null,
   };
+}
+
+function composeNotes(base: string | undefined, extra: string): string {
+  if (base && base.trim()) return `${base.trim()} | ${extra}`;
+  return extra;
 }

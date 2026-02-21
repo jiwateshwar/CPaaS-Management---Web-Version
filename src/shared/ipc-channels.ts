@@ -39,6 +39,7 @@ import type {
   MarginTrend,
   CsvPreview,
   ColumnMapping,
+  VendorRateZeroHandling,
 } from './types';
 
 export interface IpcChannelMap {
@@ -56,8 +57,9 @@ export interface IpcChannelMap {
 
   // Vendor Rates
   'vendorRate:list': { params: VendorRateListParams; result: PaginatedResult<VendorRate> };
+  'vendorRate:create': { params: CreateVendorRateDto; result: VendorRate };
   'vendorRate:getEffective': {
-    params: { vendorId: number; countryCode: string; channel: Channel; date: string };
+    params: { vendorId: number; countryCode: string; channel: Channel; useCase: string; date: string };
     result: VendorRate | null;
   };
 
@@ -104,6 +106,7 @@ export interface IpcChannelMap {
       filePath: string;
       entityId?: number;
       columnMapping: ColumnMapping[];
+      vendorRateZeroHandling?: VendorRateZeroHandling;
     };
     result: UploadBatch;
   };

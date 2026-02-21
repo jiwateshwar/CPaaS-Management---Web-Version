@@ -11,21 +11,30 @@ export const UPLOAD_TYPE_LABELS: Record<UploadType, string> = {
 export const VENDOR_RATE_FIELDS: FieldDef[] = [
   { name: 'country', label: 'Country', required: true, type: 'country' },
   { name: 'channel', label: 'Channel', required: true, type: 'channel' },
-  { name: 'rate', label: 'Rate', required: true, type: 'decimal' },
+  { name: 'use_case', label: 'Use Case', required: false, type: 'string', default: 'default' },
+  { name: 'setup_fee', label: 'Setup Fee', required: true, type: 'decimal' },
+  { name: 'monthly_fee', label: 'Monthly Fee', required: true, type: 'decimal' },
+  { name: 'mt_fee', label: 'MT Fee', required: true, type: 'decimal' },
+  { name: 'mo_fee', label: 'MO Fee', required: true, type: 'decimal' },
   { name: 'currency', label: 'Currency', required: false, type: 'currency', default: 'USD' },
   { name: 'effective_from', label: 'Effective From', required: true, type: 'date' },
   { name: 'effective_to', label: 'Effective To', required: false, type: 'date' },
+  { name: 'notes', label: 'Remarks', required: false, type: 'string' },
 ];
 
 export const CLIENT_RATE_FIELDS: FieldDef[] = [
   { name: 'country', label: 'Country', required: true, type: 'country' },
   { name: 'channel', label: 'Channel', required: true, type: 'channel' },
   { name: 'use_case', label: 'Use Case', required: false, type: 'string', default: 'default' },
-  { name: 'rate', label: 'Rate', required: true, type: 'decimal' },
+  { name: 'setup_fee', label: 'Setup Fee', required: true, type: 'decimal' },
+  { name: 'monthly_fee', label: 'Monthly Fee', required: true, type: 'decimal' },
+  { name: 'mt_fee', label: 'MT Fee', required: true, type: 'decimal' },
+  { name: 'mo_fee', label: 'MO Fee', required: true, type: 'decimal' },
   { name: 'currency', label: 'Currency', required: false, type: 'currency', default: 'USD' },
   { name: 'contract_version', label: 'Contract Version', required: false, type: 'string' },
   { name: 'effective_from', label: 'Effective From', required: true, type: 'date' },
   { name: 'effective_to', label: 'Effective To', required: false, type: 'date' },
+  { name: 'notes', label: 'Remarks', required: false, type: 'string' },
 ];
 
 export const ROUTING_FIELDS: FieldDef[] = [
@@ -43,7 +52,10 @@ export const TRAFFIC_FIELDS: FieldDef[] = [
   { name: 'country', label: 'Country', required: true, type: 'country' },
   { name: 'channel', label: 'Channel', required: true, type: 'channel' },
   { name: 'use_case', label: 'Use Case', required: false, type: 'string', default: 'default' },
-  { name: 'message_count', label: 'Message Count', required: true, type: 'integer' },
+  { name: 'setup_count', label: 'Setup Fee (count)', required: true, type: 'integer' },
+  { name: 'monthly_count', label: 'Monthly Fee (count)', required: true, type: 'integer' },
+  { name: 'mt_count', label: 'MT Traffic (count)', required: true, type: 'integer' },
+  { name: 'mo_count', label: 'MO Traffic (count)', required: true, type: 'integer' },
   { name: 'traffic_date', label: 'Traffic Date', required: true, type: 'date' },
 ];
 

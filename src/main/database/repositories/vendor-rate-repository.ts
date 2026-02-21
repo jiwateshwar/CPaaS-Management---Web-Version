@@ -18,16 +18,16 @@ export class VendorRateRepository extends BaseRepository {
     this.stmtCloseExisting = db.prepare(`
       UPDATE vendor_rates
       SET effective_to = ?, updated_at = datetime('now')
-      WHERE vendor_id = ? AND country_code = ? AND channel = ?
+      WHERE vendor_id = ? AND country_code = ? AND channel = ? AND use_case = ?
         AND effective_to IS NULL
         AND effective_from < ?
     `);
 
     this.stmtInsert = db.prepare(`
       INSERT INTO vendor_rates
-        (vendor_id, country_code, channel, rate, currency,
+        (vendor_id, country_code, channel, use_case, rate, discontinued, setup_fee, monthly_fee, mt_fee, mo_fee, currency,
          effective_from, effective_to, batch_id, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
   }
 
@@ -46,6 +46,10 @@ export class VendorRateRepository extends BaseRepository {
     if (params.channel) {
       where += ' AND vr.channel = ?';
       qp.push(params.channel);
+    }
+    if (params.use_case) {
+      where += ' AND vr.use_case = ?';
+      qp.push(params.use_case);
     }
     if (params.effective_date) {
       where += ' AND vr.effective_from <= ? AND (vr.effective_to IS NULL OR vr.effective_to > ?)';
@@ -97,19 +101,42 @@ export class VendorRateRepository extends BaseRepository {
     vendorId: number,
     countryCode: string,
     channel: string,
+    useCase: string,
     date: string,
   ): VendorRate | null {
     return (
       (this.db
         .prepare(
           `SELECT * FROM vendor_rates
-           WHERE vendor_id = ? AND country_code = ? AND channel = ?
+           WHERE vendor_id = ? AND country_code = ? AND channel = ? AND use_case = ? AND discontinued = 0
              AND effective_from <= ?
              AND (effective_to IS NULL OR effective_to > ?)
            ORDER BY effective_from DESC
            LIMIT 1`,
         )
-        .get(vendorId, countryCode, channel, date, date) as
+        .get(vendorId, countryCode, channel, useCase, date, date) as
+        | VendorRate
+        | undefined) ?? null
+    );
+  }
+
+  getMostRecentBefore(
+    vendorId: number,
+    countryCode: string,
+    channel: string,
+    useCase: string,
+    date: string,
+  ): VendorRate | null {
+    return (
+      (this.db
+        .prepare(
+          `SELECT * FROM vendor_rates
+           WHERE vendor_id = ? AND country_code = ? AND channel = ? AND use_case = ? AND discontinued = 0
+             AND effective_from < ?
+           ORDER BY effective_from DESC
+           LIMIT 1`,
+        )
+        .get(vendorId, countryCode, channel, useCase, date) as
         | VendorRate
         | undefined) ?? null
     );
@@ -118,11 +145,14 @@ export class VendorRateRepository extends BaseRepository {
   insertWithVersioning(dto: CreateVendorRateDto): VendorRate {
     return this.db.transaction(() => {
       // Auto-close previous open-ended rate
+      const useCase = dto.use_case ?? 'default';
+
       this.stmtCloseExisting.run(
         dto.effective_from,
         dto.vendor_id,
         dto.country_code,
         dto.channel,
+        useCase,
         dto.effective_from,
       );
 
@@ -131,7 +161,7 @@ export class VendorRateRepository extends BaseRepository {
       const overlaps = this.db
         .prepare(
           `SELECT id, effective_from, effective_to FROM vendor_rates
-           WHERE vendor_id = ? AND country_code = ? AND channel = ?
+           WHERE vendor_id = ? AND country_code = ? AND channel = ? AND use_case = ?
              AND effective_from < ?
              AND (effective_to IS NULL OR effective_to > ?)`,
         )
@@ -139,6 +169,7 @@ export class VendorRateRepository extends BaseRepository {
           dto.vendor_id,
           dto.country_code,
           dto.channel,
+          useCase,
           effectiveTo,
           dto.effective_from,
         );
@@ -155,7 +186,13 @@ export class VendorRateRepository extends BaseRepository {
         dto.vendor_id,
         dto.country_code,
         dto.channel,
-        dto.rate,
+        useCase,
+        dto.mt_fee,
+        dto.discontinued ?? 0,
+        dto.setup_fee,
+        dto.monthly_fee,
+        dto.mt_fee,
+        dto.mo_fee,
         dto.currency ?? 'USD',
         dto.effective_from,
         dto.effective_to ?? null,

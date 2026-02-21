@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import * as Papa from 'papaparse';
 import * as fs from 'node:fs';
-import type { ColumnMapping, UploadType, UploadBatch } from '../../shared/types';
+import type { ColumnMapping, UploadType, UploadBatch, VendorRateZeroHandling, VendorZeroRateAction } from '../../shared/types';
 import { CountryNormalizer } from '../services/country-normalizer';
 import { CountryRepository } from '../database/repositories/country-repository';
 import { VendorRateRepository } from '../database/repositories/vendor-rate-repository';
@@ -18,6 +18,7 @@ export interface CsvProcessorParams {
   entityId?: number;
   columnMapping: ColumnMapping[];
   batchId: number;
+  vendorRateZeroHandling?: VendorRateZeroHandling;
 }
 
 export interface CsvProcessorResult {
@@ -49,6 +50,7 @@ export class CsvProcessor {
   private vendorRepo: VendorRepository;
   private batchRepo: UploadBatchRepository;
   private fxRateRepo: FxRateRepository;
+  private vendorRateZeroHandling?: VendorRateZeroHandling;
 
   constructor(private db: Database.Database) {
     this.normalizer = new CountryNormalizer(db);
@@ -67,6 +69,7 @@ export class CsvProcessor {
     onProgress?: ProgressCallback,
   ): Promise<CsvProcessorResult> {
     const { type, filePath, entityId, columnMapping, batchId } = params;
+    this.vendorRateZeroHandling = params.vendorRateZeroHandling;
 
     try {
       this.batchRepo.updateStatus(batchId, 'processing');
@@ -197,16 +200,81 @@ export class CsvProcessor {
   ): boolean {
     const countryCode = this.resolveCountry(getValue('country') || '', batchId, rowIndex, rawRow);
     if (!countryCode) return false;
+    const useCase = getValue('use_case') || 'default';
+    const remarks = getValue('notes') ?? getValue('remarks');
+    const setupFee = parseFloat(getValue('setup_fee') || '0');
+    const monthlyFee = parseFloat(getValue('monthly_fee') || '0');
+    const mtFee = parseFloat(getValue('mt_fee') || '0');
+    const moFee = parseFloat(getValue('mo_fee') || '0');
+    const totalFee = setupFee + monthlyFee + mtFee + moFee;
+    const channel = (getValue('channel') || 'sms').toLowerCase() as never;
+    const effectiveFrom = getValue('effective_from') || new Date().toISOString().slice(0, 10);
+    const currency = getValue('currency') || 'USD';
+
+    if (totalFee <= 0) {
+      const action = this.resolveVendorZeroRateAction(getValue);
+      const pastRate = this.vendorRateRepo.getMostRecentBefore(
+        entityId,
+        countryCode,
+        channel,
+        useCase,
+        effectiveFrom,
+      );
+
+      if (action === 'use_past' && pastRate) {
+        this.vendorRateRepo.insertWithVersioning({
+          vendor_id: entityId,
+          country_code: countryCode,
+          channel,
+          use_case: useCase,
+          setup_fee: pastRate.setup_fee,
+          monthly_fee: pastRate.monthly_fee,
+          mt_fee: pastRate.mt_fee,
+          mo_fee: pastRate.mo_fee,
+          currency: pastRate.currency,
+          effective_from: effectiveFrom,
+          effective_to: getValue('effective_to') || undefined,
+          batch_id: batchId,
+          notes: this.composeNotes(remarks, `Used past rate #${pastRate.id}`),
+          discontinued: 0,
+        });
+        return true;
+      }
+
+      this.vendorRateRepo.insertWithVersioning({
+        vendor_id: entityId,
+        country_code: countryCode,
+        channel,
+        use_case: useCase,
+        setup_fee: 0,
+        monthly_fee: 0,
+        mt_fee: 0,
+        mo_fee: 0,
+        currency,
+        effective_from: effectiveFrom,
+        effective_to: getValue('effective_to') || undefined,
+        batch_id: batchId,
+        notes: this.composeNotes(remarks, 'Discontinued - no quoted rate'),
+        discontinued: 1,
+      });
+      return true;
+    }
 
     this.vendorRateRepo.insertWithVersioning({
       vendor_id: entityId,
       country_code: countryCode,
-      channel: (getValue('channel') || 'sms').toLowerCase() as never,
-      rate: parseFloat(getValue('rate') || '0'),
-      currency: getValue('currency') || 'USD',
-      effective_from: getValue('effective_from') || new Date().toISOString().slice(0, 10),
+      channel,
+      use_case: useCase,
+      setup_fee: setupFee,
+      monthly_fee: monthlyFee,
+      mt_fee: mtFee,
+      mo_fee: moFee,
+      currency,
+      effective_from: effectiveFrom,
       effective_to: getValue('effective_to') || undefined,
       batch_id: batchId,
+      notes: remarks || undefined,
+      discontinued: 0,
     });
     return true;
   }
@@ -220,18 +288,23 @@ export class CsvProcessor {
   ): boolean {
     const countryCode = this.resolveCountry(getValue('country') || '', batchId, rowIndex, rawRow);
     if (!countryCode) return false;
+    const remarks = getValue('notes') ?? getValue('remarks');
 
     this.clientRateRepo.insertWithVersioning({
       client_id: entityId,
       country_code: countryCode,
       channel: (getValue('channel') || 'sms').toLowerCase() as never,
       use_case: getValue('use_case') || 'default',
-      rate: parseFloat(getValue('rate') || '0'),
+      setup_fee: parseFloat(getValue('setup_fee') || '0'),
+      monthly_fee: parseFloat(getValue('monthly_fee') || '0'),
+      mt_fee: parseFloat(getValue('mt_fee') || '0'),
+      mo_fee: parseFloat(getValue('mo_fee') || '0'),
       currency: getValue('currency') || 'USD',
       contract_version: getValue('contract_version'),
       effective_from: getValue('effective_from') || new Date().toISOString().slice(0, 10),
       effective_to: getValue('effective_to') || undefined,
       batch_id: batchId,
+      notes: remarks || undefined,
     });
     return true;
   }
@@ -252,16 +325,29 @@ export class CsvProcessor {
       return false;
     }
 
+    const setupCount = parseInt(getValue('setup_count') || '0', 10);
+    const monthlyCount = parseInt(getValue('monthly_count') || '0', 10);
+    const mtCount = parseInt(getValue('mt_count') || '0', 10);
+    const moCount = parseInt(getValue('mo_count') || '0', 10);
+    const messageCount = mtCount + moCount;
+
     this.db.prepare(
-      `INSERT INTO traffic_records (batch_id, client_id, country_code, channel, use_case, message_count, traffic_date)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO traffic_records (
+        batch_id, client_id, country_code, channel, use_case,
+        setup_count, monthly_count, mt_count, mo_count, message_count, traffic_date
+      )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       batchId,
       client.id,
       countryCode,
       (getValue('channel') || 'sms').toLowerCase(),
       getValue('use_case') || 'default',
-      parseInt(getValue('message_count') || '0', 10),
+      setupCount,
+      monthlyCount,
+      mtCount,
+      moCount,
+      messageCount,
       getValue('traffic_date') || new Date().toISOString().slice(0, 10),
     );
     return true;
@@ -318,6 +404,23 @@ export class CsvProcessor {
       batch_id: batchId,
     });
     return true;
+  }
+
+  private resolveVendorZeroRateAction(
+    getValue: (field: string) => string | undefined,
+  ): VendorZeroRateAction {
+    const handling = this.vendorRateZeroHandling;
+    if (!handling) return 'use_past';
+    const country = (getValue('country') || '').trim().toLowerCase();
+    const channel = (getValue('channel') || '').trim().toLowerCase();
+    const useCase = (getValue('use_case') || 'default').trim().toLowerCase();
+    const key = `${country}|${channel}|${useCase}`;
+    return handling.perKey?.[key] ?? handling.defaultAction;
+  }
+
+  private composeNotes(base: string | undefined, extra: string): string {
+    if (base && base.trim()) return `${base.trim()} | ${extra}`;
+    return extra;
   }
 
   reloadNormalizer(): void {

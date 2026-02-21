@@ -10,7 +10,7 @@ import { createIpcHandlers } from './ipc-handlers';
 import { MarginLedgerRepository } from '../main/database/repositories/margin-ledger-repository';
 import { UploadBatchRepository } from '../main/database/repositories/upload-batch-repository';
 import { CsvProcessor } from '../main/workers/csv-processor';
-import type { ColumnMapping, UploadType } from '../shared/types';
+import type { ColumnMapping, UploadType, VendorRateZeroHandling } from '../shared/types';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const UPLOAD_DIR = process.env.UPLOAD_DIR ?? path.join(process.cwd(), 'uploads');
@@ -127,6 +127,9 @@ app.post('/api/upload/start', upload.single('file'), async (req: Request, res: R
     const columnMapping = req.body.columnMapping
       ? (JSON.parse(req.body.columnMapping) as ColumnMapping[])
       : [];
+    const vendorRateZeroHandling = req.body.vendorRateZeroHandling
+      ? (JSON.parse(req.body.vendorRateZeroHandling) as VendorRateZeroHandling)
+      : undefined;
 
     const batch = batchRepo.create(
       type,
@@ -142,6 +145,7 @@ app.post('/api/upload/start', upload.single('file'), async (req: Request, res: R
       entityId,
       columnMapping,
       batchId: batch.id,
+      vendorRateZeroHandling,
     });
 
     const updated = batchRepo.getById(batch.id);

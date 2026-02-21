@@ -168,13 +168,14 @@ export class MarginEngine {
       routing.vendor_id,
       tr.country_code,
       tr.channel,
+      tr.use_case,
       tr.traffic_date,
     );
     if (!vendorRate) {
       errors.push({
         trafficRecordId: tr.id,
         errorType: 'no_vendor_rate',
-        message: `No vendor rate for vendor=${routing.vendor_id}, country=${tr.country_code}, channel=${tr.channel}, date=${tr.traffic_date}`,
+        message: `No vendor rate for vendor=${routing.vendor_id}, country=${tr.country_code}, channel=${tr.channel}, use_case=${tr.use_case}, date=${tr.traffic_date}`,
       });
       return null;
     }
@@ -197,8 +198,27 @@ export class MarginEngine {
     }
 
     // Step 4: Compute raw costs
-    const vendorCost = round6(tr.message_count * vendorRate.rate);
-    const clientRevenue = round6(tr.message_count * clientRate.rate);
+    const setupCount = tr.setup_count ?? 0;
+    const monthlyCount = tr.monthly_count ?? 0;
+    const mtCount = tr.mt_count ?? 0;
+    const moCount = tr.mo_count ?? 0;
+    const messageCount = mtCount + moCount;
+
+    const vendorCost = round6(
+      setupCount * vendorRate.setup_fee
+        + monthlyCount * vendorRate.monthly_fee
+        + mtCount * vendorRate.mt_fee
+        + moCount * vendorRate.mo_fee,
+    );
+    const clientRevenue = round6(
+      setupCount * clientRate.setup_fee
+        + monthlyCount * clientRate.monthly_fee
+        + mtCount * clientRate.mt_fee
+        + moCount * clientRate.mo_fee,
+    );
+
+    const vendorBlendedRate = messageCount > 0 ? round6(vendorCost / messageCount) : 0;
+    const clientBlendedRate = messageCount > 0 ? round6(clientRevenue / messageCount) : 0;
 
     // Step 5: FX conversion
     let fxRateId: number | null = null;
@@ -254,13 +274,25 @@ export class MarginEngine {
       channel: tr.channel,
       use_case: tr.use_case,
       traffic_date: tr.traffic_date,
-      message_count: tr.message_count,
+      setup_count: setupCount,
+      monthly_count: monthlyCount,
+      mt_count: mtCount,
+      mo_count: moCount,
+      message_count: messageCount,
       vendor_rate_id: vendorRate.id,
-      vendor_rate: vendorRate.rate,
+      vendor_rate: vendorBlendedRate,
+      vendor_setup_fee: vendorRate.setup_fee,
+      vendor_monthly_fee: vendorRate.monthly_fee,
+      vendor_mt_fee: vendorRate.mt_fee,
+      vendor_mo_fee: vendorRate.mo_fee,
       vendor_currency: vendorRate.currency,
       vendor_cost: vendorCost,
       client_rate_id: clientRate.id,
-      client_rate: clientRate.rate,
+      client_rate: clientBlendedRate,
+      client_setup_fee: clientRate.setup_fee,
+      client_monthly_fee: clientRate.monthly_fee,
+      client_mt_fee: clientRate.mt_fee,
+      client_mo_fee: clientRate.mo_fee,
       client_currency: clientRate.currency,
       client_revenue: clientRevenue,
       fx_rate_id: fxRateId,

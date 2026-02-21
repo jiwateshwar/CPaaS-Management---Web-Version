@@ -1,6 +1,8 @@
 import Database from 'better-sqlite3';
 import { Migrator } from '../../src/main/database/migrator';
 import migration001 from '../../src/main/database/migrations/001-initial-schema';
+import migration003 from '../../src/main/database/migrations/003-rate-components';
+import migration004 from '../../src/main/database/migrations/004-vendor-rate-discontinued';
 
 /**
  * Creates an in-memory SQLite database with the full schema applied.
@@ -14,7 +16,7 @@ export function createTestDb(): Database.Database {
 
   const migrator = new Migrator(db);
   migrator.initialize();
-  migrator.migrate([migration001]);
+  migrator.migrate([migration001, migration003, migration004]);
 
   return db;
 }
@@ -90,16 +92,22 @@ export function seedMarginTestData(db: Database.Database): void {
     `INSERT INTO upload_batches (id, type, filename, status) VALUES (1, 'traffic', 'test.csv', 'completed')`,
   ).run();
 
-  // Vendor rate: US SMS at 0.005/msg
+  // Vendor rate: US SMS at 0.005/MT and 0.004/MO
   db.prepare(
-    `INSERT INTO vendor_rates (id, vendor_id, country_code, channel, rate, currency, effective_from)
-     VALUES (1, 1, 'US', 'sms', 0.005, 'USD', '2025-01-01')`,
+    `INSERT INTO vendor_rates (
+      id, vendor_id, country_code, channel, use_case, rate,
+      setup_fee, monthly_fee, mt_fee, mo_fee, currency, effective_from
+    )
+     VALUES (1, 1, 'US', 'sms', 'default', 0.005, 1.0, 2.0, 0.005, 0.004, 'USD', '2025-01-01')`,
   ).run();
 
-  // Client rate: US SMS at 0.012/msg
+  // Client rate: US SMS at 0.012/MT and 0.011/MO
   db.prepare(
-    `INSERT INTO client_rates (id, client_id, country_code, channel, use_case, rate, currency, effective_from)
-     VALUES (1, 1, 'US', 'sms', 'default', 0.012, 'USD', '2025-01-01')`,
+    `INSERT INTO client_rates (
+      id, client_id, country_code, channel, use_case, rate,
+      setup_fee, monthly_fee, mt_fee, mo_fee, currency, effective_from
+    )
+     VALUES (1, 1, 'US', 'sms', 'default', 0.012, 2.0, 3.0, 0.012, 0.011, 'USD', '2025-01-01')`,
   ).run();
 
   // Routing: Client 1 -> Vendor 1 for US SMS
@@ -108,10 +116,13 @@ export function seedMarginTestData(db: Database.Database): void {
      VALUES (1, 1, 'US', 'sms', 'default', 1, '2025-01-01')`,
   ).run();
 
-  // Traffic: 1000 msgs on 2025-03-15
+  // Traffic: 1000 MT + 900 MO on 2025-03-15
   db.prepare(
-    `INSERT INTO traffic_records (id, batch_id, client_id, country_code, channel, use_case, message_count, traffic_date)
-     VALUES (1, 1, 1, 'US', 'sms', 'default', 1000, '2025-03-15')`,
+    `INSERT INTO traffic_records (
+      id, batch_id, client_id, country_code, channel, use_case,
+      setup_count, monthly_count, mt_count, mo_count, message_count, traffic_date
+    )
+     VALUES (1, 1, 1, 'US', 'sms', 'default', 1, 1, 1000, 900, 1900, '2025-03-15')`,
   ).run();
 }
 
@@ -124,16 +135,22 @@ export function seedCrossCurrencyTestData(db: Database.Database): void {
     `INSERT INTO vendors (id, name, code, currency) VALUES (2, 'Euro Vendor', 'EV', 'EUR')`,
   ).run();
 
-  // Vendor rate for IN SMS at 0.003 EUR
+  // Vendor rate for IN SMS at 0.003 EUR (MT) and 0.0027 (MO)
   db.prepare(
-    `INSERT INTO vendor_rates (id, vendor_id, country_code, channel, rate, currency, effective_from)
-     VALUES (2, 2, 'IN', 'sms', 0.003, 'EUR', '2025-01-01')`,
+    `INSERT INTO vendor_rates (
+      id, vendor_id, country_code, channel, use_case, rate,
+      setup_fee, monthly_fee, mt_fee, mo_fee, currency, effective_from
+    )
+     VALUES (2, 2, 'IN', 'sms', 'default', 0.003, 1.5, 2.5, 0.003, 0.0027, 'EUR', '2025-01-01')`,
   ).run();
 
-  // Client rate for IN SMS at 0.008 USD
+  // Client rate for IN SMS at 0.008 USD (MT) and 0.0075 (MO)
   db.prepare(
-    `INSERT INTO client_rates (id, client_id, country_code, channel, use_case, rate, currency, effective_from)
-     VALUES (2, 1, 'IN', 'sms', 'default', 0.008, 'USD', '2025-01-01')`,
+    `INSERT INTO client_rates (
+      id, client_id, country_code, channel, use_case, rate,
+      setup_fee, monthly_fee, mt_fee, mo_fee, currency, effective_from
+    )
+     VALUES (2, 1, 'IN', 'sms', 'default', 0.008, 2.5, 3.5, 0.008, 0.0075, 'USD', '2025-01-01')`,
   ).run();
 
   // Routing: Client 1 -> Vendor 2 for IN SMS
@@ -148,9 +165,12 @@ export function seedCrossCurrencyTestData(db: Database.Database): void {
      VALUES (1, 'EUR', 'USD', 1.10, '2025-01-01')`,
   ).run();
 
-  // Traffic: 5000 msgs to India
+  // Traffic: 5000 MT + 4500 MO to India
   db.prepare(
-    `INSERT INTO traffic_records (id, batch_id, client_id, country_code, channel, use_case, message_count, traffic_date)
-     VALUES (2, 1, 1, 'IN', 'sms', 'default', 5000, '2025-03-15')`,
+    `INSERT INTO traffic_records (
+      id, batch_id, client_id, country_code, channel, use_case,
+      setup_count, monthly_count, mt_count, mo_count, message_count, traffic_date
+    )
+     VALUES (2, 1, 1, 'IN', 'sms', 'default', 1, 1, 5000, 4500, 9500, '2025-03-15')`,
   ).run();
 }

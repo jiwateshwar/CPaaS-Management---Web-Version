@@ -10,13 +10,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
 import { DataTable } from '../components/data-table/DataTable';
 import { PageHeader } from '../components/layout/PageHeader';
 import { CsvUploadWizard } from '../components/csv-upload/CsvUploadWizard';
 import { useIpcQuery, useIpcMutation } from '../hooks/useIpc';
 import type { Vendor } from '../../shared/types';
 import { VENDOR_RATE_FIELDS } from '../../shared/constants/upload-types';
-import { Plus, Search, Upload } from 'lucide-react';
+import { Pencil, Plus, Search, Trash2, Upload } from 'lucide-react';
 
 const columns: ColumnDef<Vendor, unknown>[] = [
   { accessorKey: 'code', header: 'Code' },
@@ -49,6 +57,19 @@ export function VendorListPage() {
     currency: 'USD',
   });
 
+  // Edit/Delete state
+  const [editVendor, setEditVendor] = useState<Vendor | null>(null);
+  const [editFormData, setEditFormData] = useState({
+    name: '',
+    code: '',
+    contact_name: '',
+    contact_email: '',
+    currency: 'USD',
+    status: 'active' as 'active' | 'inactive',
+  });
+  const [deleteVendor, setDeleteVendor] = useState<Vendor | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   const { data, loading, refetch } = useIpcQuery(
     'vendor:list',
     { page, pageSize: 50, search },
@@ -56,6 +77,8 @@ export function VendorListPage() {
   );
 
   const { mutate: createVendor } = useIpcMutation('vendor:create', { successMessage: 'Vendor created successfully' });
+  const { mutate: updateVendor } = useIpcMutation('vendor:update', { successMessage: 'Vendor updated successfully' });
+  const { mutate: deleteVendorMutation } = useIpcMutation('vendor:delete', { successMessage: 'Vendor deleted successfully' });
 
   const handleCreate = async () => {
     if (!formData.name || !formData.code) return;
@@ -75,20 +98,75 @@ export function VendorListPage() {
     setUploadOpen(true);
   };
 
+  const handleEdit = (vendor: Vendor) => {
+    setEditVendor(vendor);
+    setEditFormData({
+      name: vendor.name,
+      code: vendor.code,
+      contact_name: vendor.contact_name ?? '',
+      contact_email: vendor.contact_email ?? '',
+      currency: vendor.currency,
+      status: vendor.status,
+    });
+  };
+
+  const handleUpdate = async () => {
+    if (!editVendor || !editFormData.name || !editFormData.code) return;
+    await updateVendor({
+      id: editVendor.id,
+      ...editFormData,
+      contact_name: editFormData.contact_name || null,
+      contact_email: editFormData.contact_email || null,
+    });
+    setEditVendor(null);
+    refetch();
+  };
+
+  const handleDelete = async () => {
+    if (!deleteVendor) return;
+    setDeleteError(null);
+    try {
+      await deleteVendorMutation({ id: deleteVendor.id });
+      setDeleteVendor(null);
+      refetch();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete vendor');
+    }
+  };
+
   const actionColumns: ColumnDef<Vendor, unknown>[] = [
     ...columns,
     {
       id: 'actions',
       header: 'Actions',
       cell: ({ row }) => (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => handleUploadRates(row.original)}
-        >
-          <Upload className="h-3 w-3 mr-1" />
-          Upload Rates
-        </Button>
+        <div className="flex gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => handleEdit(row.original)}
+            title="Edit vendor"
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setDeleteVendor(row.original)}
+            title="Delete vendor"
+            className="text-destructive hover:text-destructive"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleUploadRates(row.original)}
+          >
+            <Upload className="h-3 w-3 mr-1" />
+            Upload Rates
+          </Button>
+        </div>
       ),
     },
   ];
@@ -235,6 +313,83 @@ export function VendorListPage() {
         fieldDefs={VENDOR_RATE_FIELDS}
         onComplete={() => refetch()}
       />
+
+      {/* Edit Vendor Dialog */}
+      <Dialog open={!!editVendor} onOpenChange={(open) => !open && setEditVendor(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Vendor</DialogTitle>
+            <DialogDescription>
+              Update vendor details below.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-3 py-4">
+            <Input
+              placeholder="Vendor Name"
+              value={editFormData.name}
+              onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+            />
+            <Input
+              placeholder="Code (e.g., TWL)"
+              value={editFormData.code}
+              onChange={(e) => setEditFormData({ ...editFormData, code: e.target.value.toUpperCase() })}
+            />
+            <Input
+              placeholder="Currency"
+              value={editFormData.currency}
+              onChange={(e) => setEditFormData({ ...editFormData, currency: e.target.value.toUpperCase() })}
+            />
+            <Select
+              value={editFormData.status}
+              onValueChange={(val) => setEditFormData({ ...editFormData, status: val as 'active' | 'inactive' })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+              </SelectContent>
+            </Select>
+            <Input
+              placeholder="Contact Name"
+              value={editFormData.contact_name}
+              onChange={(e) => setEditFormData({ ...editFormData, contact_name: e.target.value })}
+            />
+            <Input
+              placeholder="Contact Email"
+              value={editFormData.contact_email}
+              onChange={(e) => setEditFormData({ ...editFormData, contact_email: e.target.value })}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditVendor(null)}>Cancel</Button>
+            <Button onClick={handleUpdate}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteVendor} onOpenChange={(open) => { if (!open) { setDeleteVendor(null); setDeleteError(null); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Vendor</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete <strong>{deleteVendor?.name}</strong> ({deleteVendor?.code})?
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          {deleteError && (
+            <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
+              {deleteError}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setDeleteVendor(null); setDeleteError(null); }}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDelete}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

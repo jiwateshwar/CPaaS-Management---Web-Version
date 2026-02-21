@@ -1,11 +1,17 @@
 import { Channel, ListParams } from './common';
+import type { VendorZeroRateAction } from './upload';
 
 export interface VendorRate {
   id: number;
   vendor_id: number;
   country_code: string;
   channel: Channel;
-  rate: number;
+  use_case: string;
+  discontinued: number;
+  setup_fee: number;
+  monthly_fee: number;
+  mt_fee: number;
+  mo_fee: number;
   currency: string;
   effective_from: string;
   effective_to: string | null;
@@ -22,12 +28,18 @@ export interface CreateVendorRateDto {
   vendor_id: number;
   country_code: string;
   channel: Channel;
-  rate: number;
+  use_case?: string;
+  discontinued?: number;
+  setup_fee: number;
+  monthly_fee: number;
+  mt_fee: number;
+  mo_fee: number;
   currency?: string;
   effective_from: string;
   effective_to?: string | null;
   batch_id?: number | null;
   notes?: string;
+  zero_action?: VendorZeroRateAction;
 }
 
 export interface ClientRate {
@@ -36,7 +48,10 @@ export interface ClientRate {
   country_code: string;
   channel: Channel;
   use_case: string;
-  rate: number;
+  setup_fee: number;
+  monthly_fee: number;
+  mt_fee: number;
+  mo_fee: number;
   currency: string;
   contract_version: string | null;
   effective_from: string;
@@ -55,7 +70,10 @@ export interface CreateClientRateDto {
   country_code: string;
   channel: Channel;
   use_case?: string;
-  rate: number;
+  setup_fee: number;
+  monthly_fee: number;
+  mt_fee: number;
+  mo_fee: number;
   currency?: string;
   contract_version?: string | null;
   effective_from: string;
@@ -68,6 +86,7 @@ export interface VendorRateListParams extends ListParams {
   vendor_id?: number;
   country_code?: string;
   channel?: Channel;
+  use_case?: string;
   effective_date?: string;
 }
 

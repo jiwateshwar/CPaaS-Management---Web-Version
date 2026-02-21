@@ -7,6 +7,10 @@ export interface TrafficRecord {
   country_code: string;
   channel: Channel;
   use_case: string;
+  setup_count: number;
+  monthly_count: number;
+  mt_count: number;
+  mo_count: number;
   message_count: number;
   traffic_date: string;
   created_at: string;

@@ -16,7 +16,7 @@ import { MarginEngine } from '../services/margin-engine';
 import { CsvProcessor } from '../workers/csv-processor';
 import * as Papa from 'papaparse';
 import * as fs from 'node:fs';
-import type { ColumnMapping, UploadType } from '../../shared/types';
+import type { ColumnMapping, UploadType, VendorRateZeroHandling } from '../../shared/types';
 
 export function registerIpcHandlers(db: Database.Database): void {
   const vendorRepo = new VendorRepository(db);
@@ -39,6 +39,7 @@ export function registerIpcHandlers(db: Database.Database): void {
   ipcMain.handle('vendor:get', (_, params) => vendorRepo.getById(params.id));
   ipcMain.handle('vendor:create', (_, params) => vendorRepo.create(params));
   ipcMain.handle('vendor:update', (_, params) => vendorRepo.update(params));
+  ipcMain.handle('vendor:delete', (_, params) => vendorRepo.delete(params.id));
 
   // === Clients ===
   ipcMain.handle('client:list', (_, params) => clientRepo.list(params));
@@ -48,8 +49,58 @@ export function registerIpcHandlers(db: Database.Database): void {
 
   // === Vendor Rates ===
   ipcMain.handle('vendorRate:list', (_, params) => vendorRateRepo.list(params));
+  ipcMain.handle('vendorRate:create', (_, params) => {
+    const useCase = params.use_case ?? 'default';
+    const totalFee = params.setup_fee + params.monthly_fee + params.mt_fee + params.mo_fee;
+    if (totalFee <= 0) {
+      const action = params.zero_action ?? 'use_past';
+      if (action === 'use_past') {
+        const past = vendorRateRepo.getMostRecentBefore(
+          params.vendor_id,
+          params.country_code,
+          params.channel,
+          useCase,
+          params.effective_from,
+        );
+        if (past) {
+          return vendorRateRepo.insertWithVersioning({
+            ...params,
+            use_case: useCase,
+            setup_fee: past.setup_fee,
+            monthly_fee: past.monthly_fee,
+            mt_fee: past.mt_fee,
+            mo_fee: past.mo_fee,
+            currency: past.currency,
+            notes: composeNotes(params.notes, `Used past rate #${past.id}`),
+            discontinued: 0,
+          });
+        }
+      }
+      return vendorRateRepo.insertWithVersioning({
+        ...params,
+        use_case: useCase,
+        setup_fee: 0,
+        monthly_fee: 0,
+        mt_fee: 0,
+        mo_fee: 0,
+        notes: composeNotes(params.notes, 'Discontinued - no quoted rate'),
+        discontinued: 1,
+      });
+    }
+    return vendorRateRepo.insertWithVersioning({
+      ...params,
+      use_case: useCase,
+      discontinued: 0,
+    });
+  });
   ipcMain.handle('vendorRate:getEffective', (_, params) =>
-    vendorRateRepo.getEffective(params.vendorId, params.countryCode, params.channel, params.date),
+    vendorRateRepo.getEffective(
+      params.vendorId,
+      params.countryCode,
+      params.channel,
+      params.useCase,
+      params.date,
+    ),
   );
 
   // === Client Rates ===
@@ -146,7 +197,7 @@ export function registerIpcHandlers(db: Database.Database): void {
     };
   });
 
-  ipcMain.handle('upload:start', async (event, params: { type: UploadType; filePath: string; entityId?: number; columnMapping: ColumnMapping[] }) => {
+  ipcMain.handle('upload:start', async (event, params: { type: UploadType; filePath: string; entityId?: number; columnMapping: ColumnMapping[]; vendorRateZeroHandling?: VendorRateZeroHandling }) => {
     const batch = batchRepo.create(
       params.type,
       params.filePath.split(/[\\/]/).pop() || 'unknown',
@@ -162,6 +213,7 @@ export function registerIpcHandlers(db: Database.Database): void {
         entityId: params.entityId,
         columnMapping: params.columnMapping,
         batchId: batch.id,
+        vendorRateZeroHandling: params.vendorRateZeroHandling,
       },
       (progress) => {
         event.sender.send('batch:progress', progress);
@@ -299,4 +351,9 @@ export function registerIpcHandlers(db: Database.Database): void {
     });
     return result.canceled ? null : result.filePath;
   });
+}
+
+function composeNotes(base: string | undefined, extra: string): string {
+  if (base && base.trim()) return `${base.trim()} | ${extra}`;
+  return extra;
 }

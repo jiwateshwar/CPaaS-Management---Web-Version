@@ -25,9 +25,9 @@ export class ClientRateRepository extends BaseRepository {
 
     this.stmtInsert = db.prepare(`
       INSERT INTO client_rates
-        (client_id, country_code, channel, use_case, rate, currency,
+        (client_id, country_code, channel, use_case, rate, setup_fee, monthly_fee, mt_fee, mo_fee, currency,
          contract_version, effective_from, effective_to, batch_id, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
   }
 
@@ -162,7 +162,11 @@ export class ClientRateRepository extends BaseRepository {
         dto.country_code,
         dto.channel,
         useCase,
-        dto.rate,
+        dto.mt_fee,
+        dto.setup_fee,
+        dto.monthly_fee,
+        dto.mt_fee,
+        dto.mo_fee,
         dto.currency ?? 'USD',
         dto.contract_version ?? null,
         dto.effective_from,

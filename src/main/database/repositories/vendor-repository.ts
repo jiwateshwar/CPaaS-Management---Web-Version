@@ -95,4 +95,21 @@ export class VendorRepository extends BaseRepository {
     this.writeAudit('vendors', dto.id, 'UPDATE', existing, updated);
     return updated;
   }
+
+  delete(id: number): void {
+    const existing = this.getById(id);
+    if (!existing) throw new Error(`Vendor ${id} not found`);
+
+    // Check for related vendor rates
+    const ratesCount = this.db
+      .prepare('SELECT COUNT(*) as count FROM vendor_rates WHERE vendor_id = ?')
+      .get(id) as { count: number };
+
+    if (ratesCount.count > 0) {
+      throw new Error(`Cannot delete vendor: ${ratesCount.count} rate(s) are associated with this vendor. Delete the rates first.`);
+    }
+
+    this.db.prepare('DELETE FROM vendors WHERE id = ?').run(id);
+    this.writeAudit('vendors', id, 'DELETE', existing, null);
+  }
 }

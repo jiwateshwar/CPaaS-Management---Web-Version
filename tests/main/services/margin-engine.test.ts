@@ -28,12 +28,12 @@ describe('MarginEngine', () => {
       expect(result.errorCount).toBe(0);
       expect(result.errors).toHaveLength(0);
 
-      // 1000 msgs * 0.005 vendor rate = 5.00 cost
-      expect(result.summary.totalVendorCost).toBe(5.0);
-      // 1000 msgs * 0.012 client rate = 12.00 revenue
-      expect(result.summary.totalClientRevenue).toBe(12.0);
-      // margin = 12.00 - 5.00 = 7.00
-      expect(result.summary.totalMargin).toBe(7.0);
+      // Vendor cost = 1*1 + 1*2 + 1000*0.005 + 900*0.004 = 11.6
+      expect(result.summary.totalVendorCost).toBe(11.6);
+      // Client revenue = 1*2 + 1*3 + 1000*0.012 + 900*0.011 = 26.9
+      expect(result.summary.totalClientRevenue).toBe(26.9);
+      // margin = 26.9 - 11.6 = 15.3
+      expect(result.summary.totalMargin).toBe(15.3);
     });
 
     it('creates an immutable ledger entry', () => {
@@ -47,12 +47,12 @@ describe('MarginEngine', () => {
       expect(entry.client_id).toBe(1);
       expect(entry.vendor_id).toBe(1);
       expect(entry.country_code).toBe('US');
-      expect(entry.message_count).toBe(1000);
-      expect(entry.vendor_rate).toBe(0.005);
-      expect(entry.client_rate).toBe(0.012);
-      expect(entry.vendor_cost).toBe(5.0);
-      expect(entry.client_revenue).toBe(12.0);
-      expect(entry.margin).toBe(7.0);
+      expect(entry.message_count).toBe(1900);
+      expect(entry.vendor_rate).toBeCloseTo(0.006105, 6);
+      expect(entry.client_rate).toBeCloseTo(0.014158, 6);
+      expect(entry.vendor_cost).toBe(11.6);
+      expect(entry.client_revenue).toBe(26.9);
+      expect(entry.margin).toBe(15.3);
       expect(entry.locked).toBe(1);
       expect(entry.is_reversal).toBe(0);
     });
@@ -87,13 +87,14 @@ describe('MarginEngine', () => {
       expect(result.successCount).toBe(2);
       expect(result.errorCount).toBe(0);
 
-      // US: cost=5.0, revenue=12.0, margin=7.0
-      // IN: cost = 5000 * 0.003 EUR = 15 EUR, revenue = 5000 * 0.008 USD = 40 USD
-      //     normalized cost = 15 * 1.10 = 16.5 USD
-      //     margin = 40 - 16.5 = 23.5
-      expect(result.summary.totalVendorCost).toBeCloseTo(20.0, 4); // 5 + 15
-      expect(result.summary.totalClientRevenue).toBeCloseTo(52.0, 4); // 12 + 40
-      expect(result.summary.totalMargin).toBeCloseTo(30.5, 4); // 7 + 23.5
+      // US: cost=11.6, revenue=26.9, margin=15.3
+      // IN: cost = 1.5 + 2.5 + 5000*0.003 + 4500*0.0027 = 31.15 EUR
+      //     revenue = 2.5 + 3.5 + 5000*0.008 + 4500*0.0075 = 79.75 USD
+      //     normalized cost = 31.15 * 1.10 = 34.265 USD
+      //     margin = 79.75 - 34.265 = 45.485
+      expect(result.summary.totalVendorCost).toBeCloseTo(42.75, 4);
+      expect(result.summary.totalClientRevenue).toBeCloseTo(106.65, 4);
+      expect(result.summary.totalMargin).toBeCloseTo(60.785, 4);
 
       // Verify the IN entry has FX rate applied
       const inEntry = db
@@ -103,9 +104,9 @@ describe('MarginEngine', () => {
         .get() as Record<string, unknown>;
 
       expect(inEntry.fx_rate).toBe(1.1);
-      expect(inEntry.normalized_vendor_cost).toBeCloseTo(16.5, 4);
+      expect(inEntry.normalized_vendor_cost).toBeCloseTo(34.265, 4);
       expect(inEntry.normalized_currency).toBe('USD');
-      expect(inEntry.margin).toBeCloseTo(23.5, 4);
+      expect(inEntry.margin).toBeCloseTo(45.485, 4);
     });
   });
 
@@ -113,8 +114,11 @@ describe('MarginEngine', () => {
     it('reports missing routing', () => {
       // Add traffic for a country with no routing
       db.prepare(
-        `INSERT INTO traffic_records (id, batch_id, client_id, country_code, channel, use_case, message_count, traffic_date)
-         VALUES (10, 1, 1, 'DE', 'sms', 'default', 100, '2025-03-15')`,
+        `INSERT INTO traffic_records (
+          id, batch_id, client_id, country_code, channel, use_case,
+          setup_count, monthly_count, mt_count, mo_count, message_count, traffic_date
+        )
+         VALUES (10, 1, 1, 'DE', 'sms', 'default', 0, 0, 100, 0, 100, '2025-03-15')`,
       ).run();
 
       const result = engine.computeForTrafficBatch(1);
@@ -133,8 +137,11 @@ describe('MarginEngine', () => {
          VALUES (1, 'DE', 'sms', 'default', 1, '2025-01-01')`,
       ).run();
       db.prepare(
-        `INSERT INTO traffic_records (id, batch_id, client_id, country_code, channel, use_case, message_count, traffic_date)
-         VALUES (10, 1, 1, 'DE', 'sms', 'default', 100, '2025-03-15')`,
+        `INSERT INTO traffic_records (
+          id, batch_id, client_id, country_code, channel, use_case,
+          setup_count, monthly_count, mt_count, mo_count, message_count, traffic_date
+        )
+         VALUES (10, 1, 1, 'DE', 'sms', 'default', 0, 0, 100, 0, 100, '2025-03-15')`,
       ).run();
 
       const result = engine.computeForTrafficBatch(1);
@@ -152,16 +159,25 @@ describe('MarginEngine', () => {
          VALUES (1, 'DE', 'sms', 'default', 3, '2025-01-01')`,
       ).run();
       db.prepare(
-        `INSERT INTO vendor_rates (vendor_id, country_code, channel, rate, currency, effective_from)
-         VALUES (3, 'DE', 'sms', 0.004, 'EUR', '2025-01-01')`,
+        `INSERT INTO vendor_rates (
+          vendor_id, country_code, channel, use_case, rate,
+          setup_fee, monthly_fee, mt_fee, mo_fee, currency, effective_from
+        )
+         VALUES (3, 'DE', 'sms', 'default', 0.004, 0, 0, 0.004, 0.0038, 'EUR', '2025-01-01')`,
       ).run();
       db.prepare(
-        `INSERT INTO client_rates (client_id, country_code, channel, use_case, rate, currency, effective_from)
-         VALUES (1, 'DE', 'sms', 'default', 0.010, 'USD', '2025-01-01')`,
+        `INSERT INTO client_rates (
+          client_id, country_code, channel, use_case, rate,
+          setup_fee, monthly_fee, mt_fee, mo_fee, currency, effective_from
+        )
+         VALUES (1, 'DE', 'sms', 'default', 0.010, 0, 0, 0.010, 0.0095, 'USD', '2025-01-01')`,
       ).run();
       db.prepare(
-        `INSERT INTO traffic_records (id, batch_id, client_id, country_code, channel, use_case, message_count, traffic_date)
-         VALUES (10, 1, 1, 'DE', 'sms', 'default', 100, '2025-03-15')`,
+        `INSERT INTO traffic_records (
+          id, batch_id, client_id, country_code, channel, use_case,
+          setup_count, monthly_count, mt_count, mo_count, message_count, traffic_date
+        )
+         VALUES (10, 1, 1, 'DE', 'sms', 'default', 0, 0, 100, 0, 100, '2025-03-15')`,
       ).run();
 
       const result = engine.computeForTrafficBatch(1);
@@ -174,20 +190,29 @@ describe('MarginEngine', () => {
     it('rounds to 6 decimal places', () => {
       // Create a rate that produces long decimal: 7 msgs * 0.003333 = 0.023331
       db.prepare(
-        `INSERT INTO vendor_rates (vendor_id, country_code, channel, rate, currency, effective_from)
-         VALUES (1, 'GB', 'sms', 0.003333, 'USD', '2025-01-01')`,
+        `INSERT INTO vendor_rates (
+          vendor_id, country_code, channel, use_case, rate,
+          setup_fee, monthly_fee, mt_fee, mo_fee, currency, effective_from
+        )
+         VALUES (1, 'GB', 'sms', 'default', 0.003333, 0, 0, 0.003333, 0, 'USD', '2025-01-01')`,
       ).run();
       db.prepare(
-        `INSERT INTO client_rates (client_id, country_code, channel, use_case, rate, currency, effective_from)
-         VALUES (1, 'GB', 'sms', 'default', 0.007777, 'USD', '2025-01-01')`,
+        `INSERT INTO client_rates (
+          client_id, country_code, channel, use_case, rate,
+          setup_fee, monthly_fee, mt_fee, mo_fee, currency, effective_from
+        )
+         VALUES (1, 'GB', 'sms', 'default', 0.007777, 0, 0, 0.007777, 0, 'USD', '2025-01-01')`,
       ).run();
       db.prepare(
         `INSERT INTO routing_assignments (client_id, country_code, channel, use_case, vendor_id, effective_from)
          VALUES (1, 'GB', 'sms', 'default', 1, '2025-01-01')`,
       ).run();
       db.prepare(
-        `INSERT INTO traffic_records (id, batch_id, client_id, country_code, channel, use_case, message_count, traffic_date)
-         VALUES (99, 1, 1, 'GB', 'sms', 'default', 7, '2025-03-15')`,
+        `INSERT INTO traffic_records (
+          id, batch_id, client_id, country_code, channel, use_case,
+          setup_count, monthly_count, mt_count, mo_count, message_count, traffic_date
+        )
+         VALUES (99, 1, 1, 'GB', 'sms', 'default', 0, 0, 7, 0, 7, '2025-03-15')`,
       ).run();
 
       const result = engine.computeForTrafficBatch(1);
