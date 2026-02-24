@@ -117,6 +117,11 @@ export function RatesPage() {
     [],
   );
   const { data: countries } = useIpcQuery('country:list', undefined as never, []);
+  const { data: useCases } = useIpcQuery(
+    'useCase:list',
+    { page: 1, pageSize: 500, status: 'active' },
+    [],
+  );
 
   const { mutate: createVendorRate, loading: creatingVendorRate } = useIpcMutation(
     'vendorRate:create',
@@ -245,11 +250,25 @@ export function RatesPage() {
                 </SelectContent>
               </Select>
 
-              <Input
-                placeholder="Use Case"
+              <Select
                 value={vendorForm.use_case}
-                onChange={(e) => setVendorForm((prev) => ({ ...prev, use_case: e.target.value }))}
-              />
+                onValueChange={(val) => setVendorForm((prev) => ({ ...prev, use_case: val }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Use Case" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(useCases?.data?.length ?? 0) > 0 ? (
+                    useCases?.data.map((uc) => (
+                      <SelectItem key={uc.id} value={uc.name}>
+                        {uc.name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="default">default</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
 
               <Input
                 placeholder="Setup Fee"

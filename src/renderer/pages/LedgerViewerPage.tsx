@@ -76,7 +76,7 @@ export function LedgerViewerPage() {
   );
 
   const { mutate: reverseEntry, loading: reversing } = useIpcMutation('ledger:reverseEntry', { successMessage: 'Reversal entry created' });
-  const [exporting, setExporting] = useState(false);
+  const [exporting, setExporting] = useState<false | 'csv' | 'xlsx'>(false);
 
   const handleReverse = async () => {
     if (!reversalTarget || !reversalReason.trim()) return;
@@ -131,24 +131,44 @@ export function LedgerViewerPage() {
         title="Margin Ledger"
         description="Immutable financial ledger - computed margins for all traffic"
         actions={
-          <Button
-            variant="outline"
-            disabled={exporting}
-            onClick={async () => {
-              setExporting(true);
-              try {
-                await downloadLedgerExport({
-                  date_from: dateFrom || undefined,
-                  date_to: dateTo || undefined,
-                });
-              } finally {
-                setExporting(false);
-              }
-            }}
-          >
-            <Download className="h-4 w-4 mr-2" />
-            {exporting ? 'Exporting...' : 'Export CSV'}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              disabled={!!exporting}
+              onClick={async () => {
+                setExporting('csv');
+                try {
+                  await downloadLedgerExport(
+                    { date_from: dateFrom || undefined, date_to: dateTo || undefined },
+                    'csv',
+                  );
+                } finally {
+                  setExporting(false);
+                }
+              }}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              {exporting === 'csv' ? 'Exporting...' : 'Export CSV'}
+            </Button>
+            <Button
+              variant="outline"
+              disabled={!!exporting}
+              onClick={async () => {
+                setExporting('xlsx');
+                try {
+                  await downloadLedgerExport(
+                    { date_from: dateFrom || undefined, date_to: dateTo || undefined },
+                    'xlsx',
+                  );
+                } finally {
+                  setExporting(false);
+                }
+              }}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              {exporting === 'xlsx' ? 'Exporting...' : 'Export Excel'}
+            </Button>
+          </div>
         }
       />
 

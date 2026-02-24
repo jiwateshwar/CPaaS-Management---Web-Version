@@ -14,6 +14,7 @@ import { CountryMappingPage } from './pages/CountryMappingPage';
 import { FxRatesPage } from './pages/FxRatesPage';
 import { AuditLogPage } from './pages/AuditLogPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { UseCasePage } from './pages/UseCasePage';
 
 export function App() {
   return (
@@ -27,6 +28,7 @@ export function App() {
           <Route path="/routing" element={<RoutingPage />} />
           <Route path="/rates" element={<RatesPage />} />
           <Route path="/uploads" element={<UploadCenterPage />} />
+          <Route path="/use-cases" element={<UseCasePage />} />
           <Route path="/ledger" element={<LedgerViewerPage />} />
           <Route path="/countries" element={<CountryMappingPage />} />
           <Route path="/fx-rates" element={<FxRatesPage />} />

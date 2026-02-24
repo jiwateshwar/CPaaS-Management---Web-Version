@@ -10,6 +10,7 @@ import { FxRateRepository } from '../main/database/repositories/fx-rate-reposito
 import { CountryRepository } from '../main/database/repositories/country-repository';
 import { UploadBatchRepository } from '../main/database/repositories/upload-batch-repository';
 import { AuditLogRepository } from '../main/database/repositories/audit-log-repository';
+import { UseCaseRepository } from '../main/database/repositories/use-case-repository';
 import { CountryNormalizer } from '../main/services/country-normalizer';
 import { MarginEngine } from '../main/services/margin-engine';
 import type { IpcChannel, IpcChannelMap } from '../shared/ipc-channels';
@@ -33,6 +34,7 @@ export function createIpcHandlers(db: Database.Database): IpcHandlerMap {
   const countryRepo = new CountryRepository(db);
   const batchRepo = new UploadBatchRepository(db);
   const auditRepo = new AuditLogRepository(db);
+  const useCaseRepo = new UseCaseRepository(db);
   const normalizer = new CountryNormalizer(db);
   const marginEngine = new MarginEngine(db);
 
@@ -153,6 +155,14 @@ export function createIpcHandlers(db: Database.Database): IpcHandlerMap {
 
     // Audit
     'audit:list': (params) => auditRepo.list(params),
+
+    // Use Cases
+    'useCase:list': (params) => useCaseRepo.list(params),
+    'useCase:create': (params) => useCaseRepo.create(params),
+    'useCase:update': (params) => useCaseRepo.update(params),
+    'useCase:delete': (params) => {
+      useCaseRepo.delete(params.id);
+    },
 
     // Dashboard
     'dashboard:summary': (params) => {

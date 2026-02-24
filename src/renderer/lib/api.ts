@@ -56,11 +56,15 @@ export async function uploadStart(opts: {
   });
 }
 
-export async function downloadLedgerExport(params: Record<string, string | number | undefined>): Promise<void> {
+export async function downloadLedgerExport(
+  params: Record<string, string | number | undefined>,
+  format: 'csv' | 'xlsx' = 'csv',
+): Promise<void> {
   const query = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== '') query.set(key, String(value));
   });
+  query.set('format', format);
 
   const res = await fetch(`${API_BASE}/api/ledger/export?${query.toString()}`);
   if (!res.ok) {
@@ -68,7 +72,8 @@ export async function downloadLedgerExport(params: Record<string, string | numbe
   }
 
   const blob = await res.blob();
-  const filename = getFilenameFromResponse(res) ?? `ledger-export-${new Date().toISOString().slice(0, 10)}.csv`;
+  const dateStamp = new Date().toISOString().slice(0, 10);
+  const filename = getFilenameFromResponse(res) ?? `ledger-export-${dateStamp}.${format}`;
   downloadBlob(blob, filename);
 }
 

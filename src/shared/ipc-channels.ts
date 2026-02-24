@@ -41,6 +41,10 @@ import type {
   CsvPreview,
   ColumnMapping,
   VendorRateZeroHandling,
+  UseCase,
+  CreateUseCaseDto,
+  UpdateUseCaseDto,
+  UseCaseListParams,
 } from './types';
 
 export interface IpcChannelMap {
@@ -117,6 +121,12 @@ export interface IpcChannelMap {
 
   // Audit
   'audit:list': { params: AuditListParams; result: PaginatedResult<AuditLogEntry> };
+
+  // Use Cases
+  'useCase:list': { params: UseCaseListParams; result: PaginatedResult<UseCase> };
+  'useCase:create': { params: CreateUseCaseDto; result: UseCase };
+  'useCase:update': { params: UpdateUseCaseDto; result: UseCase };
+  'useCase:delete': { params: { id: number }; result: void };
 
   // Dashboard
   'dashboard:summary': { params: { month: string }; result: DashboardSummary };

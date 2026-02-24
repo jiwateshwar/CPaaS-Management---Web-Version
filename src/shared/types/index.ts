@@ -8,5 +8,6 @@ export * from './ledger';
 export * from './country';
 export * from './fx';
 export * from './upload';
+export * from './use-case';
 export * from './audit';
 export * from './dashboard';

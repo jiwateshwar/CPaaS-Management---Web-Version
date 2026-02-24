@@ -3,6 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import multer from 'multer';
 import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 import { createConnection, getDatabasePath } from '../main/database/connection';
 import { Migrator } from '../main/database/migrator';
 import { migrations } from '../main/database/migrations';
@@ -24,6 +25,17 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 const upload = multer({ dest: UPLOAD_DIR });
+
+/** Read a file as CSV text, converting Excel files if needed. */
+function readFileAsCsv(filePath: string, originalName: string): string {
+  const ext = path.extname(originalName).toLowerCase();
+  if (ext === '.xlsx' || ext === '.xls') {
+    const workbook = XLSX.readFile(filePath);
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    return XLSX.utils.sheet_to_csv(sheet);
+  }
+  return fs.readFileSync(filePath, 'utf-8');
+}
 
 const db = createConnection();
 const migrator = new Migrator(db);
@@ -80,12 +92,25 @@ app.get('/api/ledger/export', (req: Request, res: Response) => {
     pageSize: 1_000_000,
   });
 
-  const csv = Papa.unparse(result.data);
-  const filename = `ledger-export-${new Date().toISOString().slice(0, 10)}.csv`;
+  const format = req.query.format === 'xlsx' ? 'xlsx' : 'csv';
+  const dateStamp = new Date().toISOString().slice(0, 10);
 
-  res.setHeader('Content-Type', 'text/csv');
-  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-  res.send(csv);
+  if (format === 'xlsx') {
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(result.data);
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Ledger');
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    const filename = `ledger-export-${dateStamp}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  } else {
+    const csv = Papa.unparse(result.data);
+    const filename = `ledger-export-${dateStamp}.csv`;
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
+  }
 });
 
 app.post('/api/upload/preview', upload.single('file'), (req: Request, res: Response) => {
@@ -95,7 +120,7 @@ app.post('/api/upload/preview', upload.single('file'), (req: Request, res: Respo
   }
 
   try {
-    const content = fs.readFileSync(req.file.path, 'utf-8');
+    const content = readFileAsCsv(req.file.path, req.file.originalname);
     const parsed = Papa.parse(content, {
       header: true,
       preview: 50,
@@ -121,6 +146,9 @@ app.post('/api/upload/start', upload.single('file'), async (req: Request, res: R
     return;
   }
 
+  let csvFilePath = req.file.path;
+  const isExcel = /\.(xlsx|xls)$/i.test(req.file.originalname);
+
   try {
     const type = String(req.body.type) as UploadType;
     const entityId = req.body.entityId ? Number(req.body.entityId) : undefined;
@@ -130,6 +158,13 @@ app.post('/api/upload/start', upload.single('file'), async (req: Request, res: R
     const vendorRateZeroHandling = req.body.vendorRateZeroHandling
       ? (JSON.parse(req.body.vendorRateZeroHandling) as VendorRateZeroHandling)
       : undefined;
+
+    // Convert Excel to a temporary CSV file so CsvProcessor can read it normally
+    if (isExcel) {
+      const csvContent = readFileAsCsv(req.file.path, req.file.originalname);
+      csvFilePath = req.file.path + '.csv';
+      fs.writeFileSync(csvFilePath, csvContent, 'utf-8');
+    }
 
     const batch = batchRepo.create(
       type,
@@ -141,7 +176,7 @@ app.post('/api/upload/start', upload.single('file'), async (req: Request, res: R
     const csvProcessor = new CsvProcessor(db);
     await csvProcessor.process({
       type,
-      filePath: req.file.path,
+      filePath: csvFilePath,
       entityId,
       columnMapping,
       batchId: batch.id,
@@ -154,6 +189,9 @@ app.post('/api/upload/start', upload.single('file'), async (req: Request, res: R
     res.status(500).json({ error: (err as Error).message });
   } finally {
     fs.unlink(req.file.path, () => undefined);
+    if (isExcel && csvFilePath !== req.file.path) {
+      fs.unlink(csvFilePath, () => undefined);
+    }
   }
 });
 

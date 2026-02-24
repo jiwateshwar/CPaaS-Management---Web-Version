@@ -11,6 +11,7 @@ import { FxRateRepository } from '../database/repositories/fx-rate-repository';
 import { CountryRepository } from '../database/repositories/country-repository';
 import { UploadBatchRepository } from '../database/repositories/upload-batch-repository';
 import { AuditLogRepository } from '../database/repositories/audit-log-repository';
+import { UseCaseRepository } from '../database/repositories/use-case-repository';
 import { CountryNormalizer } from '../services/country-normalizer';
 import { MarginEngine } from '../services/margin-engine';
 import { CsvProcessor } from '../workers/csv-processor';
@@ -30,6 +31,7 @@ export function registerIpcHandlers(db: Database.Database): void {
   const countryRepo = new CountryRepository(db);
   const batchRepo = new UploadBatchRepository(db);
   const auditRepo = new AuditLogRepository(db);
+  const useCaseRepo = new UseCaseRepository(db);
   const normalizer = new CountryNormalizer(db);
   const marginEngine = new MarginEngine(db);
   const csvProcessor = new CsvProcessor(db);
@@ -239,6 +241,12 @@ export function registerIpcHandlers(db: Database.Database): void {
 
   // === Audit ===
   ipcMain.handle('audit:list', (_, params) => auditRepo.list(params));
+
+  // === Use Cases ===
+  ipcMain.handle('useCase:list', (_, params) => useCaseRepo.list(params));
+  ipcMain.handle('useCase:create', (_, params) => useCaseRepo.create(params));
+  ipcMain.handle('useCase:update', (_, params) => useCaseRepo.update(params));
+  ipcMain.handle('useCase:delete', (_, params) => useCaseRepo.delete(params.id));
 
   // === Dashboard ===
   ipcMain.handle('dashboard:summary', (_, params) => {

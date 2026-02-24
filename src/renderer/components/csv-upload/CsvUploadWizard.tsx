@@ -28,6 +28,7 @@ import type {
   VendorZeroRateAction,
 } from '../../../shared/types';
 import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 import { SAMPLE_CSV_DATA } from '../../../shared/constants/sample-csv';
 import { uploadPreview, uploadStart } from '../../lib/api';
 
@@ -195,11 +196,11 @@ export function CsvUploadWizard({
       <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            Upload CSV {entityName ? `for ${entityName}` : ''}
+            Upload File {entityName ? `for ${entityName}` : ''}
           </DialogTitle>
           <DialogDescription>
-            {step === 'select' && 'Select a CSV file to upload'}
-            {step === 'mapping' && 'Map CSV columns to database fields'}
+            {step === 'select' && 'Select a CSV or Excel file to upload'}
+            {step === 'mapping' && 'Map columns to database fields'}
             {step === 'processing' && 'Processing your upload...'}
             {step === 'complete' && 'Upload complete'}
           </DialogDescription>
@@ -236,7 +237,8 @@ export function CsvUploadWizard({
         {step === 'select' && (
           <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed rounded-lg">
             <Upload className="h-12 w-12 text-muted-foreground mb-4" />
-            <p className="text-muted-foreground mb-4">Select a CSV file to upload</p>
+            <p className="text-muted-foreground mb-4">Select a CSV or Excel file to upload</p>
+            <p className="text-xs text-muted-foreground mb-4">.csv, .xlsx, .xls supported</p>
             <div className="flex gap-3">
               <Button onClick={handleSelectFile} disabled={loading}>
                 {loading ? (
@@ -249,7 +251,7 @@ export function CsvUploadWizard({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".csv,.txt"
+                accept=".csv,.txt,.xlsx,.xls"
                 className="hidden"
                 onChange={handleFileChange}
               />
@@ -559,9 +561,19 @@ function autoMapColumns(headers: string[], fieldDefs: FieldDef[]): ColumnMapping
 }
 
 async function detectZeroRateKeys(file: File): Promise<Array<{ key: string; country: string; channel: string; useCase: string }>> {
-  const text = await file.text();
-  const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
-  const rows = parsed.data as Record<string, string>[];
+  let rows: Record<string, string>[];
+
+  const ext = file.name.split('.').pop()?.toLowerCase();
+  if (ext === 'xlsx' || ext === 'xls') {
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: 'array' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, { defval: '' });
+  } else {
+    const text = await file.text();
+    const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+    rows = parsed.data as Record<string, string>[];
+  }
   const seen = new Map<string, { country: string; channel: string; useCase: string }>();
 
   for (const row of rows) {
