@@ -4,15 +4,28 @@ import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { PageHeader } from '../components/layout/PageHeader';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
 import { useIpcQuery, useIpcMutation } from '../hooks/useIpc';
 import type { CountryMaster, PendingCountryResolution } from '../../shared/types';
-import { Check, Search } from 'lucide-react';
+import { Check, Download, Plus, Search } from 'lucide-react';
+import Papa from 'papaparse';
+import { invoke } from '../lib/api';
 
 export function CountryMappingPage() {
   const [tab, setTab] = useState<'master' | 'pending'>('pending');
   const [search, setSearch] = useState('');
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [addForm, setAddForm] = useState({ code: '', name: '', iso_alpha3: '', iso_numeric: '' });
+  const [addError, setAddError] = useState<string | null>(null);
 
-  const { data: countries } = useIpcQuery('country:list', undefined as never, []);
+  const { data: countries, refetch: refetchCountries } = useIpcQuery('country:list', undefined as never, []);
   const { data: pending, refetch: refetchPending } = useIpcQuery(
     'country:pendingResolutions',
     undefined as never,
@@ -20,10 +33,57 @@ export function CountryMappingPage() {
   );
 
   const { mutate: resolveMapping } = useIpcMutation('country:resolveMapping', { successMessage: 'Country mapping saved' });
+  const { mutate: createCountry, loading: creating } = useIpcMutation('country:create', { successMessage: 'Country added' });
 
   const handleResolve = async (resolutionId: number, countryCode: string) => {
     await resolveMapping({ resolutionId, countryCode });
     refetchPending();
+  };
+
+  const handleAddCountry = async () => {
+    setAddError(null);
+    if (!addForm.code.trim() || !addForm.name.trim()) {
+      setAddError('Code and name are required');
+      return;
+    }
+    if (addForm.code.trim().length !== 2) {
+      setAddError('Code must be exactly 2 letters (ISO alpha-2)');
+      return;
+    }
+    try {
+      await createCountry({
+        code: addForm.code.trim().toUpperCase(),
+        name: addForm.name.trim(),
+        iso_alpha3: addForm.iso_alpha3.trim() || undefined,
+        iso_numeric: addForm.iso_numeric.trim() || undefined,
+      });
+      setShowAddDialog(false);
+      setAddForm({ code: '', name: '', iso_alpha3: '', iso_numeric: '' });
+      refetchCountries();
+    } catch (err) {
+      setAddError((err as Error).message);
+    }
+  };
+
+  const handleDownloadSynonyms = async () => {
+    const aliases = await invoke('country:allAliases', undefined as never);
+    const csv = Papa.unparse(
+      aliases.map((a) => ({
+        'Country Code': a.country_code,
+        'Country Name': a.country_name,
+        'Alias / Synonym': a.alias,
+        'Source': a.source,
+      })),
+    );
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `country-synonyms-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const filteredCountries = (countries ?? []).filter(
@@ -100,14 +160,24 @@ export function CountryMappingPage() {
 
       {tab === 'master' && (
         <>
-          <div className="mb-4 w-64 relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search countries..."
-              className="pl-9"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-64 relative">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search countries..."
+                className="pl-9"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <Button variant="outline" onClick={() => setShowAddDialog(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Country
+            </Button>
+            <Button variant="outline" onClick={handleDownloadSynonyms}>
+              <Download className="h-4 w-4 mr-2" />
+              Download Synonyms
+            </Button>
           </div>
           <Card>
             <CardContent className="p-0">
@@ -135,6 +205,79 @@ export function CountryMappingPage() {
           </Card>
         </>
       )}
+
+      {/* Add Country Dialog */}
+      <Dialog
+        open={showAddDialog}
+        onOpenChange={(open) => {
+          setShowAddDialog(open);
+          if (!open) {
+            setAddForm({ code: '', name: '', iso_alpha3: '', iso_numeric: '' });
+            setAddError(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Country</DialogTitle>
+            <DialogDescription>
+              Add a new country to the master list. Code must be a 2-letter ISO alpha-2 code.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Code (Alpha-2) *</label>
+                <Input
+                  placeholder="e.g. WF"
+                  maxLength={2}
+                  value={addForm.code}
+                  onChange={(e) => setAddForm((prev) => ({ ...prev, code: e.target.value.toUpperCase() }))}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Alpha-3</label>
+                <Input
+                  placeholder="e.g. WLF"
+                  maxLength={3}
+                  value={addForm.iso_alpha3}
+                  onChange={(e) => setAddForm((prev) => ({ ...prev, iso_alpha3: e.target.value.toUpperCase() }))}
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Country Name *</label>
+              <Input
+                placeholder="e.g. Wallis and Futuna"
+                value={addForm.name}
+                onChange={(e) => setAddForm((prev) => ({ ...prev, name: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">ISO Numeric</label>
+              <Input
+                placeholder="e.g. 876"
+                maxLength={3}
+                value={addForm.iso_numeric}
+                onChange={(e) => setAddForm((prev) => ({ ...prev, iso_numeric: e.target.value }))}
+              />
+            </div>
+            {addError && (
+              <p className="text-sm text-destructive">{addError}</p>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddCountry} disabled={creating}>
+              Add Country
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

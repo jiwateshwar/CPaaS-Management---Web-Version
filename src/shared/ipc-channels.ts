@@ -24,7 +24,9 @@ import type {
   ComputeResult,
   CountryMaster,
   CountryAlias,
+  CountryAliasWithName,
   CountryMatchResult,
+  CreateCountryDto,
   PendingCountryResolution,
   FxRate,
   CreateFxRateDto,
@@ -89,7 +91,9 @@ export interface IpcChannelMap {
 
   // Country
   'country:list': { params: void; result: CountryMaster[] };
+  'country:create': { params: CreateCountryDto; result: CountryMaster };
   'country:aliases': { params: { countryCode: string }; result: CountryAlias[] };
+  'country:allAliases': { params: void; result: CountryAliasWithName[] };
   'country:resolve': { params: { rawName: string }; result: CountryMatchResult };
   'country:saveAlias': { params: { countryCode: string; alias: string; source: string }; result: CountryAlias };
   'country:pendingResolutions': { params: void; result: PendingCountryResolution[] };

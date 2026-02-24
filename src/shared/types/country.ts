@@ -36,3 +36,18 @@ export interface CountryMatchResult {
   matchedAgainst: string;
   originalInput: string;
 }
+
+export interface CreateCountryDto {
+  code: string;
+  name: string;
+  iso_alpha3?: string;
+  iso_numeric?: string;
+}
+
+export interface CountryAliasWithName {
+  id: number;
+  country_code: string;
+  country_name: string;
+  alias: string;
+  source: string;
+}

@@ -1,6 +1,8 @@
 import type {
   CountryMaster,
   CountryAlias,
+  CountryAliasWithName,
+  CreateCountryDto,
   PendingCountryResolution,
 } from '../../../shared/types';
 import { BaseRepository } from './base-repository';
@@ -46,6 +48,35 @@ export class CountryRepository extends BaseRepository {
 
   deleteAlias(id: number): void {
     this.db.prepare('DELETE FROM country_aliases WHERE id = ?').run(id);
+  }
+
+  createCountry(dto: CreateCountryDto): CountryMaster {
+    const existing = this.db
+      .prepare('SELECT * FROM country_master WHERE code = ? OR name = ?')
+      .get(dto.code.toUpperCase(), dto.name) as CountryMaster | undefined;
+    if (existing) throw new Error(`Country with code "${dto.code}" or name "${dto.name}" already exists`);
+
+    this.db
+      .prepare(
+        `INSERT INTO country_master (code, name, iso_alpha3, iso_numeric)
+         VALUES (?, ?, ?, ?)`,
+      )
+      .run(dto.code.toUpperCase(), dto.name, dto.iso_alpha3 ?? null, dto.iso_numeric ?? null);
+
+    return this.db
+      .prepare('SELECT * FROM country_master WHERE code = ?')
+      .get(dto.code.toUpperCase()) as CountryMaster;
+  }
+
+  listAllAliasesWithNames(): CountryAliasWithName[] {
+    return this.db
+      .prepare(
+        `SELECT ca.id, ca.country_code, cm.name AS country_name, ca.alias, ca.source
+         FROM country_aliases ca
+         JOIN country_master cm ON cm.code = ca.country_code
+         ORDER BY cm.name, ca.alias`,
+      )
+      .all() as CountryAliasWithName[];
   }
 
   getPendingResolutions(): PendingCountryResolution[] {

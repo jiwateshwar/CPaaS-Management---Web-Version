@@ -130,7 +130,13 @@ export function createIpcHandlers(db: Database.Database): IpcHandlerMap {
 
     // Country
     'country:list': () => countryRepo.listCountries(),
+    'country:create': (params) => {
+      const country = countryRepo.createCountry(params);
+      normalizer.reload();
+      return country;
+    },
     'country:aliases': (params) => countryRepo.listAliases(params.countryCode),
+    'country:allAliases': () => countryRepo.listAllAliasesWithNames(),
     'country:resolve': (params) => normalizer.resolve(params.rawName),
     'country:saveAlias': (params) => {
       const alias = countryRepo.saveAlias(params.countryCode, params.alias, params.source);
