@@ -26,6 +26,17 @@ export class UseCaseRepository extends BaseRepository {
     );
   }
 
+  getByName(name: string): UseCase | null {
+    return (
+      (this.db.prepare('SELECT * FROM use_cases WHERE name = ? COLLATE NOCASE').get(name) as UseCase | undefined) ??
+      null
+    );
+  }
+
+  getAll(): UseCase[] {
+    return this.db.prepare('SELECT * FROM use_cases WHERE status = ? ORDER BY name').all('active') as UseCase[];
+  }
+
   getById(id: number): UseCase | null {
     return (
       (this.db.prepare('SELECT * FROM use_cases WHERE id = ?').get(id) as UseCase | undefined) ??

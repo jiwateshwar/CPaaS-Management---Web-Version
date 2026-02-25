@@ -12,6 +12,7 @@ import { CountryRepository } from '../database/repositories/country-repository';
 import { UploadBatchRepository } from '../database/repositories/upload-batch-repository';
 import { AuditLogRepository } from '../database/repositories/audit-log-repository';
 import { UseCaseRepository } from '../database/repositories/use-case-repository';
+import { ChannelRepository } from '../database/repositories/channel-repository';
 import { CountryNormalizer } from '../services/country-normalizer';
 import { MarginEngine } from '../services/margin-engine';
 import { CsvProcessor } from '../workers/csv-processor';
@@ -32,6 +33,7 @@ export function registerIpcHandlers(db: Database.Database): void {
   const batchRepo = new UploadBatchRepository(db);
   const auditRepo = new AuditLogRepository(db);
   const useCaseRepo = new UseCaseRepository(db);
+  const channelRepo = new ChannelRepository(db);
   const normalizer = new CountryNormalizer(db);
   const marginEngine = new MarginEngine(db);
   const csvProcessor = new CsvProcessor(db);
@@ -247,6 +249,14 @@ export function registerIpcHandlers(db: Database.Database): void {
   ipcMain.handle('useCase:create', (_, params) => useCaseRepo.create(params));
   ipcMain.handle('useCase:update', (_, params) => useCaseRepo.update(params));
   ipcMain.handle('useCase:delete', (_, params) => useCaseRepo.delete(params.id));
+  ipcMain.handle('useCase:getAll', () => useCaseRepo.getAll());
+
+  // === Channels ===
+  ipcMain.handle('channel:list', (_, params) => channelRepo.list(params));
+  ipcMain.handle('channel:create', (_, params) => channelRepo.create(params));
+  ipcMain.handle('channel:update', (_, params) => channelRepo.update(params));
+  ipcMain.handle('channel:delete', (_, params) => channelRepo.delete(params.id));
+  ipcMain.handle('channel:getAll', () => channelRepo.getAll());
 
   // === Dashboard ===
   ipcMain.handle('dashboard:summary', (_, params) => {

@@ -11,6 +11,7 @@ import { CountryRepository } from '../main/database/repositories/country-reposit
 import { UploadBatchRepository } from '../main/database/repositories/upload-batch-repository';
 import { AuditLogRepository } from '../main/database/repositories/audit-log-repository';
 import { UseCaseRepository } from '../main/database/repositories/use-case-repository';
+import { ChannelRepository } from '../main/database/repositories/channel-repository';
 import { CountryNormalizer } from '../main/services/country-normalizer';
 import { MarginEngine } from '../main/services/margin-engine';
 import type { IpcChannel, IpcChannelMap } from '../shared/ipc-channels';
@@ -35,6 +36,7 @@ export function createIpcHandlers(db: Database.Database): IpcHandlerMap {
   const batchRepo = new UploadBatchRepository(db);
   const auditRepo = new AuditLogRepository(db);
   const useCaseRepo = new UseCaseRepository(db);
+  const channelRepo = new ChannelRepository(db);
   const normalizer = new CountryNormalizer(db);
   const marginEngine = new MarginEngine(db);
 
@@ -169,6 +171,16 @@ export function createIpcHandlers(db: Database.Database): IpcHandlerMap {
     'useCase:delete': (params) => {
       useCaseRepo.delete(params.id);
     },
+    'useCase:getAll': () => useCaseRepo.getAll(),
+
+    // Channels
+    'channel:list': (params) => channelRepo.list(params),
+    'channel:create': (params) => channelRepo.create(params),
+    'channel:update': (params) => channelRepo.update(params),
+    'channel:delete': (params) => {
+      channelRepo.delete(params.id);
+    },
+    'channel:getAll': () => channelRepo.getAll(),
 
     // Dashboard
     'dashboard:summary': (params) => {

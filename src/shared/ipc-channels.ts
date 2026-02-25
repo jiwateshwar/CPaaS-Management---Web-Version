@@ -1,6 +1,10 @@
 import type {
   PaginatedResult,
   Channel,
+  ChannelRecord,
+  CreateChannelDto,
+  UpdateChannelDto,
+  ChannelListParams,
   Vendor,
   CreateVendorDto,
   UpdateVendorDto,
@@ -131,6 +135,14 @@ export interface IpcChannelMap {
   'useCase:create': { params: CreateUseCaseDto; result: UseCase };
   'useCase:update': { params: UpdateUseCaseDto; result: UseCase };
   'useCase:delete': { params: { id: number }; result: void };
+  'useCase:getAll': { params: void; result: UseCase[] };
+
+  // Channels
+  'channel:list': { params: ChannelListParams; result: PaginatedResult<ChannelRecord> };
+  'channel:create': { params: CreateChannelDto; result: ChannelRecord };
+  'channel:update': { params: UpdateChannelDto; result: ChannelRecord };
+  'channel:delete': { params: { id: number }; result: void };
+  'channel:getAll': { params: void; result: ChannelRecord[] };
 
   // Dashboard
   'dashboard:summary': { params: { month: string }; result: DashboardSummary };

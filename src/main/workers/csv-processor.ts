@@ -11,6 +11,8 @@ import { ClientRepository } from '../database/repositories/client-repository';
 import { VendorRepository } from '../database/repositories/vendor-repository';
 import { UploadBatchRepository } from '../database/repositories/upload-batch-repository';
 import { FxRateRepository } from '../database/repositories/fx-rate-repository';
+import { ChannelRepository } from '../database/repositories/channel-repository';
+import { UseCaseRepository } from '../database/repositories/use-case-repository';
 
 export interface CsvProcessorParams {
   type: UploadType;
@@ -50,6 +52,8 @@ export class CsvProcessor {
   private vendorRepo: VendorRepository;
   private batchRepo: UploadBatchRepository;
   private fxRateRepo: FxRateRepository;
+  private channelRepo: ChannelRepository;
+  private useCaseRepo: UseCaseRepository;
   private vendorRateZeroHandling?: VendorRateZeroHandling;
 
   constructor(private db: Database.Database) {
@@ -62,6 +66,8 @@ export class CsvProcessor {
     this.vendorRepo = new VendorRepository(db);
     this.batchRepo = new UploadBatchRepository(db);
     this.fxRateRepo = new FxRateRepository(db);
+    this.channelRepo = new ChannelRepository(db);
+    this.useCaseRepo = new UseCaseRepository(db);
   }
 
   async process(
@@ -191,6 +197,42 @@ export class CsvProcessor {
     return result.countryCode!;
   }
 
+  private resolveChannel(
+    raw: string,
+    batchId: number,
+    rowIndex: number,
+    rawRow: Record<string, string>,
+  ): string | null {
+    const trimmed = raw.trim();
+    const isNumeric = /^\d+$/.test(trimmed);
+    const channel = isNumeric
+      ? this.channelRepo.getById(parseInt(trimmed, 10))
+      : this.channelRepo.getByCode(trimmed);
+    if (!channel || channel.status !== 'active') {
+      this.batchRepo.addError(batchId, rowIndex + 2, JSON.stringify(rawRow), 'validation', `Unknown or inactive channel: "${raw}"`);
+      return null;
+    }
+    return channel.code;
+  }
+
+  private resolveUseCase(
+    raw: string,
+    batchId: number,
+    rowIndex: number,
+    rawRow: Record<string, string>,
+  ): string | null {
+    const trimmed = raw.trim();
+    const isNumeric = /^\d+$/.test(trimmed);
+    const useCase = isNumeric
+      ? this.useCaseRepo.getById(parseInt(trimmed, 10))
+      : this.useCaseRepo.getByName(trimmed);
+    if (!useCase || useCase.status !== 'active') {
+      this.batchRepo.addError(batchId, rowIndex + 2, JSON.stringify(rawRow), 'validation', `Unknown or inactive use case: "${raw}"`);
+      return null;
+    }
+    return useCase.name;
+  }
+
   private processVendorRate(
     entityId: number,
     getValue: (f: string) => string | undefined,
@@ -200,14 +242,16 @@ export class CsvProcessor {
   ): boolean {
     const countryCode = this.resolveCountry(getValue('country') || '', batchId, rowIndex, rawRow);
     if (!countryCode) return false;
-    const useCase = getValue('use_case') || 'default';
+    const useCase = this.resolveUseCase(getValue('use_case') || 'default', batchId, rowIndex, rawRow);
+    if (!useCase) return false;
+    const channel = this.resolveChannel(getValue('channel') || 'sms', batchId, rowIndex, rawRow) as never;
+    if (!channel) return false;
     const remarks = getValue('notes') ?? getValue('remarks');
     const setupFee = parseFloat(getValue('setup_fee') || '0');
     const monthlyFee = parseFloat(getValue('monthly_fee') || '0');
     const mtFee = parseFloat(getValue('mt_fee') || '0');
     const moFee = parseFloat(getValue('mo_fee') || '0');
     const totalFee = setupFee + monthlyFee + mtFee + moFee;
-    const channel = (getValue('channel') || 'sms').toLowerCase() as never;
     const effectiveFrom = getValue('effective_from') || new Date().toISOString().slice(0, 10);
     const currency = getValue('currency') || 'USD';
 
@@ -288,13 +332,17 @@ export class CsvProcessor {
   ): boolean {
     const countryCode = this.resolveCountry(getValue('country') || '', batchId, rowIndex, rawRow);
     if (!countryCode) return false;
+    const channel = this.resolveChannel(getValue('channel') || 'sms', batchId, rowIndex, rawRow) as never;
+    if (!channel) return false;
+    const useCase = this.resolveUseCase(getValue('use_case') || 'default', batchId, rowIndex, rawRow);
+    if (!useCase) return false;
     const remarks = getValue('notes') ?? getValue('remarks');
 
     this.clientRateRepo.insertWithVersioning({
       client_id: entityId,
       country_code: countryCode,
-      channel: (getValue('channel') || 'sms').toLowerCase() as never,
-      use_case: getValue('use_case') || 'default',
+      channel,
+      use_case: useCase,
       setup_fee: parseFloat(getValue('setup_fee') || '0'),
       monthly_fee: parseFloat(getValue('monthly_fee') || '0'),
       mt_fee: parseFloat(getValue('mt_fee') || '0'),
@@ -325,6 +373,11 @@ export class CsvProcessor {
       return false;
     }
 
+    const channel = this.resolveChannel(getValue('channel') || 'sms', batchId, rowIndex, rawRow);
+    if (!channel) return false;
+    const useCase = this.resolveUseCase(getValue('use_case') || 'default', batchId, rowIndex, rawRow);
+    if (!useCase) return false;
+
     const setupCount = parseInt(getValue('setup_count') || '0', 10);
     const monthlyCount = parseInt(getValue('monthly_count') || '0', 10);
     const mtCount = parseInt(getValue('mt_count') || '0', 10);
@@ -341,8 +394,8 @@ export class CsvProcessor {
       batchId,
       client.id,
       countryCode,
-      (getValue('channel') || 'sms').toLowerCase(),
-      getValue('use_case') || 'default',
+      channel,
+      useCase,
       setupCount,
       monthlyCount,
       mtCount,
@@ -376,11 +429,16 @@ export class CsvProcessor {
       return false;
     }
 
+    const channel = this.resolveChannel(getValue('channel') || 'sms', batchId, rowIndex, rawRow) as never;
+    if (!channel) return false;
+    const useCase = this.resolveUseCase(getValue('use_case') || 'default', batchId, rowIndex, rawRow);
+    if (!useCase) return false;
+
     this.routingRepo.create({
       client_id: client.id,
       country_code: countryCode,
-      channel: (getValue('channel') || 'sms').toLowerCase() as never,
-      use_case: getValue('use_case') || 'default',
+      channel,
+      use_case: useCase,
       vendor_id: vendor.id,
       effective_from: getValue('effective_from') || new Date().toISOString().slice(0, 10),
       effective_to: getValue('effective_to') || undefined,
